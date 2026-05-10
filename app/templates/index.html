@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLM Wiki</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>LLM Wiki</h1>
+    <nav>
+      <button class="tab active" data-tab="ingest">Ingest</button>
+      <button class="tab" data-tab="query">Query</button>
+      <button class="tab" data-tab="browse">Browse</button>
+      <button class="tab" data-tab="lint">Lint</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- INGEST -->
+    <section id="tab-ingest" class="panel active">
+      <h2>Ingest a source</h2>
+      <p class="muted">
+        Drop in a markdown or text source. The agent reads it, updates wiki pages,
+        refreshes the index, and appends a log entry.
+      </p>
+      <label>Source name (kebab-case slug)
+        <input id="ingest-name" type="text" placeholder="napoleon-in-russia" />
+      </label>
+      <label>Content
+        <textarea id="ingest-content" rows="14" placeholder="Paste markdown or plain text here..."></textarea>
+      </label>
+      <button id="ingest-go">Ingest</button>
+      <div id="ingest-status" class="status"></div>
+      <h3>Result</h3>
+      <div id="ingest-summary" class="rendered"></div>
+      <details>
+        <summary>Tool trace</summary>
+        <ol id="ingest-trace" class="trace"></ol>
+      </details>
+    </section>
+
+    <!-- QUERY -->
+    <section id="tab-query" class="panel">
+      <h2>Ask the wiki</h2>
+      <label>Question
+        <textarea id="query-q" rows="3" placeholder="What does the wiki say about ...?"></textarea>
+      </label>
+      <button id="query-go">Ask</button>
+      <div id="query-status" class="status"></div>
+      <h3>Answer</h3>
+      <div id="query-answer" class="rendered"></div>
+      <details>
+        <summary>Tool trace</summary>
+        <ol id="query-trace" class="trace"></ol>
+      </details>
+    </section>
+
+    <!-- BROWSE -->
+    <section id="tab-browse" class="panel">
+      <h2>Browse the wiki</h2>
+      <div class="browse">
+        <aside>
+          <h3>Pages</h3>
+          <button id="browse-refresh" class="link">refresh</button>
+          <ul id="page-list"></ul>
+          <h3>Index</h3>
+          <button class="link" id="show-index">show index.md</button>
+          <h3>Log</h3>
+          <button class="link" id="show-log">show log.md</button>
+          <h3>Schema</h3>
+          <button class="link" id="show-schema">show SCHEMA.md</button>
+        </aside>
+        <article>
+          <div id="page-title" class="muted">Select a page from the left.</div>
+          <div id="page-body" class="rendered"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- LINT -->
+    <section id="tab-lint" class="panel">
+      <h2>Lint the wiki</h2>
+      <p class="muted">Health-check: contradictions, orphans, missing pages, stale claims.</p>
+      <button id="lint-go">Run lint</button>
+      <div id="lint-status" class="status"></div>
+      <h3>Report</h3>
+      <div id="lint-report" class="rendered"></div>
+      <details>
+        <summary>Tool trace</summary>
+        <ol id="lint-trace" class="trace"></ol>
+      </details>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
