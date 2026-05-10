@@ -36,6 +36,20 @@ class LintResult(BaseModel):
     trace: list[TraceStep]
 
 
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="'user' or 'assistant'")
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    trace: list[TraceStep]
+
+
 class PageView(BaseModel):
     name: str
     content_md: str

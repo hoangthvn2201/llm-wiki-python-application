@@ -1,10 +1,12 @@
 """Orchestrators for the three operations."""
 from __future__ import annotations
 
+from typing import Any
+
 from app.config import get_settings
-from app.llm import run_agent
-from app.prompts import INGEST_SYSTEM, LINT_SYSTEM, QUERY_SYSTEM
-from app.schemas import IngestResult, LintResult, QueryResult
+from app.llm import run_agent, run_loop
+from app.prompts import CHAT_SYSTEM, INGEST_SYSTEM, LINT_SYSTEM, QUERY_SYSTEM
+from app.schemas import ChatMessage, ChatResponse, IngestResult, LintResult, QueryResult
 from app.tools import INGEST_TOOLS, LINT_TOOLS, READ_ONLY_TOOLS
 from app.wiki import Wiki
 
@@ -43,6 +45,29 @@ def query(question: str) -> QueryResult:
         allowed_tools=READ_ONLY_TOOLS,
     )
     return QueryResult(answer=result.final_text, trace=result.trace)
+
+
+def chat(history: list[ChatMessage]) -> ChatResponse:
+    """Multi-turn chat against the wiki with read-only tools.
+
+    The client owns conversation state and POSTs the full history each turn.
+    """
+    wiki = _wiki()
+    if not history:
+        raise ValueError("chat history must contain at least one message")
+
+    messages: list[dict[str, Any]] = [{"role": "system", "content": CHAT_SYSTEM}]
+    for m in history:
+        if m.role not in ("user", "assistant"):
+            raise ValueError(f"invalid role {m.role!r}; expected 'user' or 'assistant'")
+        messages.append({"role": m.role, "content": m.content})
+
+    result = run_loop(
+        wiki=wiki,
+        messages=messages,
+        allowed_tools=READ_ONLY_TOOLS,
+    )
+    return ChatResponse(reply=result.final_text, trace=result.trace)
 
 
 def lint() -> LintResult:

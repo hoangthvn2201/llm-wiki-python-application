@@ -11,8 +11,10 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from app.config import get_settings
-from app.operations import ingest, lint, query
+from app.operations import chat, ingest, lint, query
 from app.schemas import (
+    ChatRequest,
+    ChatResponse,
     IndexView,
     IngestRequest,
     IngestResult,
@@ -66,6 +68,14 @@ def api_ingest(req: IngestRequest) -> IngestResult:
 @app.post("/api/query", response_model=QueryResult)
 def api_query(req: QueryRequest) -> QueryResult:
     return query(req.question)
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def api_chat(req: ChatRequest) -> ChatResponse:
+    try:
+        return chat(req.messages)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/lint", response_model=LintResult)

@@ -11,6 +11,7 @@
     <h1>LLM Wiki</h1>
     <nav>
       <button class="tab active" data-tab="ingest">Ingest</button>
+      <button class="tab" data-tab="chat">Chat</button>
       <button class="tab" data-tab="query">Query</button>
       <button class="tab" data-tab="browse">Browse</button>
       <button class="tab" data-tab="lint">Lint</button>
@@ -39,6 +40,23 @@
         <summary>Tool trace</summary>
         <ol id="ingest-trace" class="trace"></ol>
       </details>
+    </section>
+
+    <!-- CHAT -->
+    <section id="tab-chat" class="panel">
+      <div class="chat-header">
+        <h2>Chat with your wiki</h2>
+        <button id="chat-clear" class="link">clear conversation</button>
+      </div>
+      <p class="muted">
+        Multi-turn conversation grounded in your wiki. Read-only — to add sources use Ingest.
+      </p>
+      <div id="chat-log" class="chat-log"></div>
+      <div id="chat-status" class="status"></div>
+      <form id="chat-form" class="chat-form">
+        <textarea id="chat-input" rows="2" placeholder="Ask about anything in the wiki... (Enter to send, Shift+Enter for newline)"></textarea>
+        <button id="chat-send" type="submit">Send</button>
+      </form>
     </section>
 
     <!-- QUERY -->

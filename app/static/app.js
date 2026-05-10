@@ -202,5 +202,103 @@ document.getElementById("show-schema").addEventListener("click", async () => {
   document.getElementById("page-body").innerHTML = `<pre>${escapeHtml(res.content_md)}</pre>`;
 });
 
+// -------------------- chat --------------------
+
+const chatHistory = []; // [{role, content, trace?}]
+
+const chatLog = document.getElementById("chat-log");
+const chatInput = document.getElementById("chat-input");
+const chatForm = document.getElementById("chat-form");
+const chatStatus = document.getElementById("chat-status");
+const chatSend = document.getElementById("chat-send");
+
+function renderChat() {
+  chatLog.innerHTML = "";
+  for (const m of chatHistory) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + m.role;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    if (m.role === "assistant") {
+      bubble.innerHTML = tinyMarkdown(m.content);
+    } else {
+      bubble.textContent = m.content;
+    }
+    wrap.appendChild(bubble);
+    if (m.trace && m.trace.length) {
+      const det = document.createElement("details");
+      const sum = document.createElement("summary");
+      sum.textContent = `tool trace (${m.trace.length})`;
+      det.appendChild(sum);
+      const ol = document.createElement("ol");
+      ol.className = "trace";
+      renderTrace(ol, m.trace);
+      det.appendChild(ol);
+      wrap.appendChild(det);
+    }
+    chatLog.appendChild(wrap);
+  }
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function showThinking(on) {
+  let el = document.getElementById("chat-thinking");
+  if (on) {
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "chat-thinking";
+      el.className = "msg assistant";
+      el.innerHTML = '<div class="bubble thinking">thinking</div>';
+      chatLog.appendChild(el);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+  } else if (el) {
+    el.remove();
+  }
+}
+
+async function sendChat() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatHistory.push({ role: "user", content: text });
+  chatInput.value = "";
+  renderChat();
+  chatSend.disabled = true;
+  setStatus(chatStatus, "");
+  showThinking(true);
+
+  // Send only role+content; the server doesn't need our trace echoes back.
+  const payload = chatHistory.map(({ role, content }) => ({ role, content }));
+  try {
+    const res = await postJSON("/api/chat", { messages: payload });
+    chatHistory.push({ role: "assistant", content: res.reply, trace: res.trace });
+    renderChat();
+  } catch (e) {
+    setStatus(chatStatus, e.message, true);
+  } finally {
+    showThinking(false);
+    chatSend.disabled = false;
+    chatInput.focus();
+  }
+}
+
+chatForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendChat();
+});
+
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+document.getElementById("chat-clear").addEventListener("click", () => {
+  chatHistory.length = 0;
+  setStatus(chatStatus, "");
+  renderChat();
+});
+
 // initial load
 refreshPageList();

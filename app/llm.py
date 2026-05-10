@@ -42,14 +42,30 @@ def run_agent(
     user_prompt: str,
     allowed_tools: list[str],
 ) -> AgentResult:
-    settings = get_settings()
-    client = _client()
-    tools = schemas_for(allowed_tools)
-
+    """Single-turn entry point: builds a fresh [system, user] thread."""
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+    return run_loop(wiki=wiki, messages=messages, allowed_tools=allowed_tools)
+
+
+def run_loop(
+    *,
+    wiki: Wiki,
+    messages: list[dict[str, Any]],
+    allowed_tools: list[str],
+) -> AgentResult:
+    """Run the tool-use loop on a pre-built message list.
+
+    Caller is responsible for building the full thread (system prompt + any
+    prior conversation history). The loop appends assistant turns and tool
+    results in place; the final assistant content (or `finish` summary) is
+    returned.
+    """
+    settings = get_settings()
+    client = _client()
+    tools = schemas_for(allowed_tools)
     trace: list[TraceStep] = []
 
     for _ in range(settings.max_tool_iterations):
