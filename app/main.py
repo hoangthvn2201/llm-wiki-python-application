@@ -4,14 +4,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import markdown as md
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from app.config import get_settings
-from app.operations import chat, ingest, lint, query
+from app.operations import chat, ingest, ingest_pdf, lint, query
 from app.schemas import (
     ChatRequest,
     ChatResponse,
@@ -61,6 +61,20 @@ def index(request: Request):
 def api_ingest(req: IngestRequest) -> IngestResult:
     try:
         return ingest(req.source_name, req.content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/ingest/pdf", response_model=IngestResult)
+async def api_ingest_pdf(
+    source_name: str = Form(...),
+    file: UploadFile = File(...),
+) -> IngestResult:
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="file must be a .pdf")
+    data = await file.read()
+    try:
+        return ingest_pdf(source_name, data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

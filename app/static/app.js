@@ -83,19 +83,36 @@ function tinyMarkdown(text) {
 document.getElementById("ingest-go").addEventListener("click", async () => {
   const name = document.getElementById("ingest-name").value.trim();
   const content = document.getElementById("ingest-content").value;
+  const fileInput = document.getElementById("ingest-file");
+  const file = fileInput.files && fileInput.files[0];
   const btn = document.getElementById("ingest-go");
   const status = document.getElementById("ingest-status");
-  if (!name || !content.trim()) {
-    setStatus(status, "Provide both a name and content.", true);
+  if (!name) {
+    setStatus(status, "Provide a source name.", true);
+    return;
+  }
+  if (!file && !content.trim()) {
+    setStatus(status, "Provide either a PDF file or some content.", true);
     return;
   }
   btn.disabled = true;
   setStatus(status, "Ingesting... the agent may take a while.");
   try {
-    const res = await postJSON("/api/ingest", { source_name: name, content });
+    let res;
+    if (file) {
+      const fd = new FormData();
+      fd.append("source_name", name);
+      fd.append("file", file);
+      const r = await fetch("/api/ingest/pdf", { method: "POST", body: fd });
+      if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+      res = await r.json();
+    } else {
+      res = await postJSON("/api/ingest", { source_name: name, content });
+    }
     setStatus(status, "Done.");
     document.getElementById("ingest-summary").innerHTML = tinyMarkdown(res.summary);
     renderTrace(document.getElementById("ingest-trace"), res.trace);
+    fileInput.value = "";
     refreshPageList();
   } catch (e) {
     setStatus(status, e.message, true);

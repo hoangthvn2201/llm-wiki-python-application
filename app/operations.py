@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.config import get_settings
+from app.ingest import PdfExtractionError, get_pdf_extractor
 from app.llm import run_agent, run_loop
 from app.prompts import CHAT_SYSTEM, INGEST_SYSTEM, LINT_SYSTEM, QUERY_SYSTEM
 from app.schemas import ChatMessage, ChatResponse, IngestResult, LintResult, QueryResult
@@ -33,6 +34,31 @@ def ingest(source_name: str, content: str) -> IngestResult:
         allowed_tools=INGEST_TOOLS,
     )
     return IngestResult(summary=result.final_text, trace=result.trace)
+
+
+def ingest_pdf(
+    source_name: str,
+    pdf_bytes: bytes,
+    *,
+    backend: str = "pypdf",
+) -> IngestResult:
+    """Extract a PDF to markdown then delegate to the existing ingest flow."""
+    extractor = get_pdf_extractor(backend)
+    try:
+        extracted = extractor.extract(pdf_bytes, filename=f"{source_name}.pdf")
+    except PdfExtractionError as e:
+        raise ValueError(f"PDF extraction failed: {e}") from e
+
+    parts = [f"# {source_name}", ""]
+    if extracted.metadata:
+        parts.append("## Document metadata")
+        for k, v in extracted.metadata.items():
+            parts.append(f"- **{k}**: {v}")
+        parts.append("")
+    parts.append(extracted.text)
+    content = "\n".join(parts)
+
+    return ingest(source_name, content)
 
 
 def query(question: str) -> QueryResult:
