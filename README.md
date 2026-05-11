@@ -1,6 +1,12 @@
 # LLM Wiki
 
-A Python MVP of the [LLM Wiki](./llm-wiki.md) idea: an LLM that incrementally builds and maintains a persistent markdown wiki from raw sources, instead of re-deriving knowledge per query like classical RAG.
+A Python application inspired by Andrew Karpathy’s notes on
+LLM-native knowledge organization:
+https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+
+The core idea: an LLM incrementally builds and maintains a persistent
+Markdown wiki from raw sources, instead of re-deriving knowledge for
+every query like classical RAG systems.
 
 ## Quick start
 
