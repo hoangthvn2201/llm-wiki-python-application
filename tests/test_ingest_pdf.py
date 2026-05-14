@@ -89,3 +89,43 @@ def test_ingest_pdf_wraps_extraction_error_as_value_error(monkeypatch, captured)
 
     # ingest() must NOT have been called when extraction fails.
     assert "source_name" not in captured
+
+
+def test_ingest_pdf_content_starts_with_title_heading(monkeypatch, captured):
+    extracted = ExtractedPdf(text="## Page 1\n\nBody", page_count=1, metadata={})
+    _install_extractor(monkeypatch, _FakeExtractor(result=extracted))
+
+    operations.ingest_pdf("my-source", b"%PDF-...")
+
+    # The content handed to ingest() begins with `# <source_name>`.
+    assert captured["content"].startswith("# my-source\n")
+
+
+def test_ingest_pdf_passes_filename_with_pdf_extension_to_extractor(
+    monkeypatch, captured
+):
+    seen: dict = {}
+
+    class _FilenameSpy(PdfExtractor):
+        @property
+        def name(self) -> str:
+            return "spy"
+
+        def extract(self, data: bytes, *, filename: str | None = None) -> ExtractedPdf:
+            seen["filename"] = filename
+            return ExtractedPdf(text="## Page 1\n\nx", page_count=1, metadata={})
+
+    _install_extractor(monkeypatch, _FilenameSpy())
+
+    operations.ingest_pdf("my-source", b"%PDF-...")
+
+    assert seen["filename"] == "my-source.pdf"
+
+
+def test_ingest_pdf_unknown_backend_raises_value_error(monkeypatch, captured):
+    # Don't install a fake extractor — let the real get_pdf_extractor be hit
+    # with an unknown backend name. ingest() should never be called.
+    with pytest.raises(ValueError):
+        operations.ingest_pdf("my-source", b"%PDF-...", backend="totally-fake")
+
+    assert "source_name" not in captured
