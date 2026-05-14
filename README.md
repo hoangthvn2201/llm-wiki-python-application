@@ -1,6 +1,6 @@
 # LLM Wiki
 
-A Python application inspired by Andrew Karpathy’s notes on
+A Python application inspired by Andrej Karpathy’s notes on
 LLM-native knowledge organization:
 https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 
