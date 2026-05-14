@@ -65,16 +65,24 @@ def api_ingest(req: IngestRequest) -> IngestResult:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/ingest/file", response_model=IngestResult)
 @app.post("/api/ingest/pdf", response_model=IngestResult)
-async def api_ingest_pdf(
+async def api_ingest_file(
     source_name: str = Form(...),
     file: UploadFile = File(...),
 ) -> IngestResult:
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="file must be a .pdf")
+    name = (file.filename or "").lower()
     data = await file.read()
     try:
-        return ingest_pdf(source_name, data)
+        if name.endswith(".pdf"):
+            return ingest_pdf(source_name, data)
+        if name.endswith(".md") or name.endswith(".markdown"):
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError:
+                raise HTTPException(status_code=400, detail="markdown file must be UTF-8")
+            return ingest(source_name, text)
+        raise HTTPException(status_code=400, detail="file must be a .pdf or .md")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

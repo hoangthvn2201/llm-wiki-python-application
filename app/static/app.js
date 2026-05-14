@@ -121,11 +121,21 @@ function resetIngestForm() {
   ingestFile.value = "";
   ingestName.value = "";
   ingestDrop.classList.remove("has-file", "is-drag");
-  ingestDropText.textContent = "Click to select a PDF, or drag & drop here";
+  ingestDropText.textContent = "Click to select a PDF or .md file, or drag & drop here";
   setStatus(ingestStatus, "");
   ingestResult.hidden = true;
   ingestSummary.innerHTML = "";
   ingestTrace.innerHTML = "";
+}
+
+function fileKind(file) {
+  const name = (file.name || "").toLowerCase();
+  if (name.endsWith(".pdf")) return "pdf";
+  if (name.endsWith(".md") || name.endsWith(".markdown")) return "md";
+  const type = (file.type || "").toLowerCase();
+  if (type === "application/pdf") return "pdf";
+  if (type === "text/markdown") return "md";
+  return null;
 }
 
 ingestOpenBtn.addEventListener("click", openIngestModal);
@@ -180,11 +190,15 @@ ingestGo.addEventListener("click", async () => {
   const name = ingestName.value.trim();
   const file = ingestFile.files && ingestFile.files[0];
   if (!file) {
-    setStatus(ingestStatus, "Select a PDF file first.", true);
+    setStatus(ingestStatus, "Select a PDF or .md file first.", true);
     return;
   }
   if (!name) {
     setStatus(ingestStatus, "Provide a source name.", true);
+    return;
+  }
+  if (!fileKind(file)) {
+    setStatus(ingestStatus, "Unsupported file type. Use .pdf or .md.", true);
     return;
   }
   ingestGo.disabled = true;
@@ -193,7 +207,7 @@ ingestGo.addEventListener("click", async () => {
     const fd = new FormData();
     fd.append("source_name", name);
     fd.append("file", file);
-    const r = await fetch("/api/ingest/pdf", { method: "POST", body: fd });
+    const r = await fetch("/api/ingest/file", { method: "POST", body: fd });
     if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
     const res = await r.json();
     setStatus(ingestStatus, "Done.");
