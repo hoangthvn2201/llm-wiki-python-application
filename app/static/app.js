@@ -61,11 +61,21 @@ function truncate(s, n) {
   return s && s.length > n ? s.slice(0, n) + "…" : s;
 }
 
+// Derive a kebab-case slug from a filename (drops extension).
+function slugifyFilename(name) {
+  const base = name.replace(/\.[^.]+$/, "");
+  return base
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
 // Very tiny markdown-ish renderer for the *answer/summary/report* boxes.
-// The Browse tab uses server-rendered HTML directly.
 function tinyMarkdown(text) {
   if (!text) return "";
-  // Escape, then apply a few transforms.
   let s = escapeHtml(text);
   s = s.replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${code}</code></pre>`);
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -78,46 +88,123 @@ function tinyMarkdown(text) {
   return `<p>${s}</p>`;
 }
 
-// -------------------- ingest --------------------
+// -------------------- ingest (modal, PDF-only) --------------------
 
-document.getElementById("ingest-go").addEventListener("click", async () => {
-  const name = document.getElementById("ingest-name").value.trim();
-  const content = document.getElementById("ingest-content").value;
-  const fileInput = document.getElementById("ingest-file");
-  const file = fileInput.files && fileInput.files[0];
-  const btn = document.getElementById("ingest-go");
-  const status = document.getElementById("ingest-status");
+const ingestModal   = document.getElementById("ingest-modal");
+const ingestOpenBtn = document.getElementById("ingest-open");
+const ingestOpenAlt = document.getElementById("ingest-open-alt");
+const ingestCloseBtn= document.getElementById("ingest-close");
+const ingestDrop    = document.getElementById("ingest-drop");
+const ingestDropText= document.getElementById("ingest-drop-text");
+const ingestFile    = document.getElementById("ingest-file");
+const ingestName    = document.getElementById("ingest-name");
+const ingestGo      = document.getElementById("ingest-go");
+const ingestStatus  = document.getElementById("ingest-status");
+const ingestResult  = document.getElementById("ingest-result");
+const ingestSummary = document.getElementById("ingest-summary");
+const ingestTrace   = document.getElementById("ingest-trace");
+const inlineIngest  = document.querySelector(".inline-ingest");
+
+function openIngestModal() {
+  ingestModal.classList.add("is-open");
+  ingestModal.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeIngestModal() {
+  ingestModal.classList.remove("is-open");
+  ingestModal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function resetIngestForm() {
+  ingestFile.value = "";
+  ingestName.value = "";
+  ingestDrop.classList.remove("has-file", "is-drag");
+  ingestDropText.textContent = "Click to select a PDF, or drag & drop here";
+  setStatus(ingestStatus, "");
+  ingestResult.hidden = true;
+  ingestSummary.innerHTML = "";
+  ingestTrace.innerHTML = "";
+}
+
+ingestOpenBtn.addEventListener("click", openIngestModal);
+if (ingestOpenAlt) ingestOpenAlt.addEventListener("click", openIngestModal);
+if (inlineIngest)  inlineIngest.addEventListener("click", openIngestModal);
+ingestCloseBtn.addEventListener("click", closeIngestModal);
+
+ingestModal.addEventListener("click", (e) => {
+  if (e.target === ingestModal) closeIngestModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ingestModal.classList.contains("is-open")) closeIngestModal();
+});
+
+// drag & drop
+["dragenter", "dragover"].forEach((ev) =>
+  ingestDrop.addEventListener(ev, (e) => {
+    e.preventDefault();
+    ingestDrop.classList.add("is-drag");
+  })
+);
+["dragleave", "drop"].forEach((ev) =>
+  ingestDrop.addEventListener(ev, (e) => {
+    e.preventDefault();
+    ingestDrop.classList.remove("is-drag");
+  })
+);
+ingestDrop.addEventListener("drop", (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) assignFile(f);
+});
+
+ingestFile.addEventListener("change", () => {
+  const f = ingestFile.files && ingestFile.files[0];
+  if (f) assignFile(f);
+});
+
+function assignFile(file) {
+  // place into the hidden input via DataTransfer so the form sees it
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  ingestFile.files = dt.files;
+
+  ingestDrop.classList.add("has-file");
+  ingestDropText.textContent = file.name;
+  if (!ingestName.value.trim()) {
+    ingestName.value = slugifyFilename(file.name);
+  }
+}
+
+ingestGo.addEventListener("click", async () => {
+  const name = ingestName.value.trim();
+  const file = ingestFile.files && ingestFile.files[0];
+  if (!file) {
+    setStatus(ingestStatus, "Select a PDF file first.", true);
+    return;
+  }
   if (!name) {
-    setStatus(status, "Provide a source name.", true);
+    setStatus(ingestStatus, "Provide a source name.", true);
     return;
   }
-  if (!file && !content.trim()) {
-    setStatus(status, "Provide either a PDF file or some content.", true);
-    return;
-  }
-  btn.disabled = true;
-  setStatus(status, "Ingesting... the agent may take a while.");
+  ingestGo.disabled = true;
+  setStatus(ingestStatus, "Ingesting... the agent may take a while.");
   try {
-    let res;
-    if (file) {
-      const fd = new FormData();
-      fd.append("source_name", name);
-      fd.append("file", file);
-      const r = await fetch("/api/ingest/pdf", { method: "POST", body: fd });
-      if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
-      res = await r.json();
-    } else {
-      res = await postJSON("/api/ingest", { source_name: name, content });
-    }
-    setStatus(status, "Done.");
-    document.getElementById("ingest-summary").innerHTML = tinyMarkdown(res.summary);
-    renderTrace(document.getElementById("ingest-trace"), res.trace);
-    fileInput.value = "";
+    const fd = new FormData();
+    fd.append("source_name", name);
+    fd.append("file", file);
+    const r = await fetch("/api/ingest/pdf", { method: "POST", body: fd });
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    const res = await r.json();
+    setStatus(ingestStatus, "Done.");
+    ingestResult.hidden = false;
+    ingestSummary.innerHTML = tinyMarkdown(res.summary);
+    renderTrace(ingestTrace, res.trace);
     refreshPageList();
   } catch (e) {
-    setStatus(status, e.message, true);
+    setStatus(ingestStatus, e.message, true);
   } finally {
-    btn.disabled = false;
+    ingestGo.disabled = false;
   }
 });
 
@@ -284,7 +371,6 @@ async function sendChat() {
   setStatus(chatStatus, "");
   showThinking(true);
 
-  // Send only role+content; the server doesn't need our trace echoes back.
   const payload = chatHistory.map(({ role, content }) => ({ role, content }));
   try {
     const res = await postJSON("/api/chat", { messages: payload });
@@ -319,3 +405,4 @@ document.getElementById("chat-clear").addEventListener("click", () => {
 
 // initial load
 refreshPageList();
+chatInput.focus();

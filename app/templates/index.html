@@ -3,117 +3,238 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LLM Wiki</title>
+  <title>LLM Wiki — Academic Intelligence Interface</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
-<body>
-  <header>
-    <h1>LLM Wiki</h1>
-    <nav>
-      <button class="tab active" data-tab="ingest">Ingest</button>
-      <button class="tab" data-tab="chat">Chat</button>
-      <button class="tab" data-tab="query">Query</button>
-      <button class="tab" data-tab="browse">Browse</button>
-      <button class="tab" data-tab="lint">Lint</button>
-    </nav>
-  </header>
+<body class="app">
 
-  <main>
-    <!-- INGEST -->
-    <section id="tab-ingest" class="panel active">
-      <h2>Ingest a source</h2>
-      <p class="muted">
-        Drop in a markdown or text source. The agent reads it, updates wiki pages,
-        refreshes the index, and appends a log entry.
-      </p>
-      <label>Source name (kebab-case slug)
-        <input id="ingest-name" type="text" placeholder="napoleon-in-russia" />
-      </label>
-      <label>PDF file (optional — if set, content textarea is ignored)
-        <input id="ingest-file" type="file" accept="application/pdf,.pdf" />
-      </label>
-      <label>Content
-        <textarea id="ingest-content" rows="14" placeholder="Paste markdown or plain text here..."></textarea>
-      </label>
-      <button id="ingest-go">Ingest</button>
-      <div id="ingest-status" class="status"></div>
-      <h3>Result</h3>
-      <div id="ingest-summary" class="rendered"></div>
-      <details>
-        <summary>Tool trace</summary>
-        <ol id="ingest-trace" class="trace"></ol>
-      </details>
-    </section>
-
-    <!-- CHAT -->
-    <section id="tab-chat" class="panel">
-      <div class="chat-header">
-        <h2>Chat with your wiki</h2>
-        <button id="chat-clear" class="link">clear conversation</button>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">◆</div>
+      <div class="brand-text">
+        <div class="brand-name">LLM Wiki</div>
+        <div class="brand-sub">academic intelligence</div>
       </div>
-      <p class="muted">
-        Multi-turn conversation grounded in your wiki. Read-only — to add sources use Ingest.
-      </p>
-      <div id="chat-log" class="chat-log"></div>
-      <div id="chat-status" class="status"></div>
-      <form id="chat-form" class="chat-form">
-        <textarea id="chat-input" rows="2" placeholder="Ask about anything in the wiki... (Enter to send, Shift+Enter for newline)"></textarea>
-        <button id="chat-send" type="submit">Send</button>
-      </form>
+    </div>
+
+    <nav class="nav" aria-label="Primary">
+      <div class="nav-label">workspace</div>
+      <button class="tab active" data-tab="chat">
+        <span class="nav-icon" aria-hidden="true">◗</span>
+        <span class="nav-text">Chat</span>
+        <span class="nav-hint">RAG</span>
+      </button>
+      <button class="tab" data-tab="query">
+        <span class="nav-icon" aria-hidden="true">?</span>
+        <span class="nav-text">Query</span>
+        <span class="nav-hint">single</span>
+      </button>
+
+      <div class="nav-label">archive</div>
+      <button class="tab" data-tab="browse">
+        <span class="nav-icon" aria-hidden="true">❐</span>
+        <span class="nav-text">Browse</span>
+        <span class="nav-hint">pages</span>
+      </button>
+      <button class="tab" data-tab="lint">
+        <span class="nav-icon" aria-hidden="true">✓</span>
+        <span class="nav-text">Lint</span>
+        <span class="nav-hint">health</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button id="ingest-open" class="btn-upload" type="button" title="Upload a PDF source">
+        <span class="btn-glyph">＋</span>
+        <span>Upload source</span>
+      </button>
+      <div class="status-pill">
+        <span class="dot"></span>
+        <span>retrieval online</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- CHAT (default) -->
+    <section id="tab-chat" class="panel active">
+      <header class="panel-header chat-header">
+        <div>
+          <div class="eyebrow">workspace · chat</div>
+          <h1>Conversational Retrieval</h1>
+          <p class="lede">
+            Multi-turn conversation grounded in your wiki. Read-only — to add new
+            sources use <button class="link inline-ingest" type="button">Upload source</button>.
+          </p>
+        </div>
+        <div class="chat-header-actions">
+          <button id="ingest-open-alt" class="btn-ghost" type="button">
+            <span class="btn-glyph">＋</span> Upload PDF
+          </button>
+          <button id="chat-clear" class="link">clear conversation</button>
+        </div>
+      </header>
+
+      <div class="card chat-card">
+        <div id="chat-log" class="chat-log"></div>
+        <div id="chat-status" class="status"></div>
+        <form id="chat-form" class="chat-form">
+          <textarea id="chat-input" rows="2" placeholder="Ask about anything in the wiki...  ⏎ to send · ⇧⏎ for newline"></textarea>
+          <button id="chat-send" type="submit" class="btn-primary">Send</button>
+        </form>
+      </div>
     </section>
 
     <!-- QUERY -->
     <section id="tab-query" class="panel">
-      <h2>Ask the wiki</h2>
-      <label>Question
-        <textarea id="query-q" rows="3" placeholder="What does the wiki say about ...?"></textarea>
-      </label>
-      <button id="query-go">Ask</button>
-      <div id="query-status" class="status"></div>
-      <h3>Answer</h3>
-      <div id="query-answer" class="rendered"></div>
-      <details>
-        <summary>Tool trace</summary>
-        <ol id="query-trace" class="trace"></ol>
-      </details>
+      <header class="panel-header">
+        <div class="eyebrow">workspace · query</div>
+        <h1>Ask the Wiki</h1>
+        <p class="lede">Single-turn lookup. Returns a grounded answer with citations and a tool trace.</p>
+      </header>
+
+      <div class="card form-card">
+        <label class="field">
+          <span class="field-label">Question</span>
+          <textarea id="query-q" rows="3" placeholder="What does the wiki say about ...?"></textarea>
+        </label>
+        <div class="action-row">
+          <button id="query-go" class="btn-primary"><span class="btn-glyph">▶</span> Ask</button>
+          <div id="query-status" class="status"></div>
+        </div>
+      </div>
+
+      <section class="card result-card">
+        <div class="card-head">
+          <h2>Answer</h2>
+          <span class="tag tag-ai">AI response</span>
+        </div>
+        <div id="query-answer" class="rendered"></div>
+        <details class="trace-details">
+          <summary>tool trace</summary>
+          <ol id="query-trace" class="trace"></ol>
+        </details>
+      </section>
     </section>
 
     <!-- BROWSE -->
     <section id="tab-browse" class="panel">
-      <h2>Browse the wiki</h2>
+      <header class="panel-header">
+        <div class="eyebrow">archive · browse</div>
+        <h1>Knowledge Archive</h1>
+        <p class="lede">Inspect the underlying wiki, index, schema, and ingestion log.</p>
+      </header>
+
       <div class="browse">
-        <aside>
-          <h3>Pages</h3>
-          <button id="browse-refresh" class="link">refresh</button>
-          <ul id="page-list"></ul>
-          <h3>Index</h3>
-          <button class="link" id="show-index">show index.md</button>
-          <h3>Log</h3>
-          <button class="link" id="show-log">show log.md</button>
-          <h3>Schema</h3>
-          <button class="link" id="show-schema">show SCHEMA.md</button>
+        <aside class="browse-nav card">
+          <div class="browse-section">
+            <div class="browse-head">
+              <h3>Pages</h3>
+              <button id="browse-refresh" class="link">refresh</button>
+            </div>
+            <ul id="page-list" class="page-list"></ul>
+          </div>
+          <div class="browse-section">
+            <h3>Meta</h3>
+            <ul class="page-list">
+              <li><button class="meta-btn" id="show-index"><span class="mono">index.md</span></button></li>
+              <li><button class="meta-btn" id="show-log"><span class="mono">log.md</span></button></li>
+              <li><button class="meta-btn" id="show-schema"><span class="mono">SCHEMA.md</span></button></li>
+            </ul>
+          </div>
         </aside>
-        <article>
-          <div id="page-title" class="muted">Select a page from the left.</div>
-          <div id="page-body" class="rendered"></div>
+        <article class="document card">
+          <div id="page-title" class="doc-title muted">Select a page from the left.</div>
+          <div id="page-body" class="rendered reading"></div>
         </article>
       </div>
     </section>
 
     <!-- LINT -->
     <section id="tab-lint" class="panel">
-      <h2>Lint the wiki</h2>
-      <p class="muted">Health-check: contradictions, orphans, missing pages, stale claims.</p>
-      <button id="lint-go">Run lint</button>
-      <div id="lint-status" class="status"></div>
-      <h3>Report</h3>
-      <div id="lint-report" class="rendered"></div>
-      <details>
-        <summary>Tool trace</summary>
-        <ol id="lint-trace" class="trace"></ol>
-      </details>
+      <header class="panel-header">
+        <div class="eyebrow">archive · lint</div>
+        <h1>Wiki Health Check</h1>
+        <p class="lede">Surface contradictions, orphans, missing pages, and stale claims.</p>
+      </header>
+
+      <div class="card form-card">
+        <div class="action-row">
+          <button id="lint-go" class="btn-primary"><span class="btn-glyph">▶</span> Run lint</button>
+          <div id="lint-status" class="status"></div>
+        </div>
+      </div>
+
+      <section class="card result-card">
+        <div class="card-head">
+          <h2>Report</h2>
+          <span class="tag tag-ai">diagnostic</span>
+        </div>
+        <div id="lint-report" class="rendered"></div>
+        <details class="trace-details">
+          <summary>tool trace</summary>
+          <ol id="lint-trace" class="trace"></ol>
+        </details>
+      </section>
     </section>
+
   </main>
+
+  <!-- INGEST MODAL -->
+  <div id="ingest-modal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ingest-modal-title">
+      <header class="modal-head">
+        <div>
+          <div class="eyebrow">action · ingest</div>
+          <h2 id="ingest-modal-title">Upload a PDF Source</h2>
+        </div>
+        <button class="modal-close" id="ingest-close" type="button" aria-label="Close">✕</button>
+      </header>
+
+      <p class="modal-lede">
+        The agent reads the document, updates the wiki pages, refreshes the index,
+        and appends a structured log entry.
+      </p>
+
+      <div class="modal-body">
+        <label class="field">
+          <span class="field-label">PDF file <em class="field-meta">required</em></span>
+          <label class="dropzone" id="ingest-drop">
+            <input id="ingest-file" type="file" accept="application/pdf,.pdf" hidden />
+            <span class="dropzone-icon" aria-hidden="true">⇪</span>
+            <span class="dropzone-text" id="ingest-drop-text">Click to select a PDF, or drag &amp; drop here</span>
+            <span class="dropzone-hint mono">application/pdf</span>
+          </label>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Source name <em class="field-meta">kebab-case slug — auto-filled from filename</em></span>
+          <input id="ingest-name" type="text" placeholder="napoleon-in-russia" />
+        </label>
+
+        <div class="action-row">
+          <button id="ingest-go" class="btn-primary"><span class="btn-glyph">▶</span> Ingest source</button>
+          <div id="ingest-status" class="status"></div>
+        </div>
+      </div>
+
+      <section id="ingest-result" class="modal-result" hidden>
+        <div class="card-head">
+          <h3>Result</h3>
+          <span class="tag tag-ai">AI summary</span>
+        </div>
+        <div id="ingest-summary" class="rendered"></div>
+        <details class="trace-details">
+          <summary>tool trace</summary>
+          <ol id="ingest-trace" class="trace"></ol>
+        </details>
+      </section>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
