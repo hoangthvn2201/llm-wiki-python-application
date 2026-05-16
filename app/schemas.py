@@ -1,7 +1,7 @@
 """Pydantic request/response models for the FastAPI surface."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -33,6 +33,22 @@ class QueryResult(BaseModel):
 
 class LintResult(BaseModel):
     report: str
+    trace: list[TraceStep]
+
+
+class HallucinationFinding(BaseModel):
+    page: str
+    claim: str
+    type: Literal["factual", "quantitative", "relational", "temporal", "negation", "synthesis"]
+    layer: int = Field(..., ge=1, le=3)
+    verdict: Literal["supported", "contradicted", "unverifiable", "hallucination"]
+    evidence: str = ""
+
+
+class HallucinationCheckResult(BaseModel):
+    summary: str
+    findings: list[HallucinationFinding]
+    report_path: str
     trace: list[TraceStep]
 
 

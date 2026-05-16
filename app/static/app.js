@@ -266,6 +266,72 @@ document.getElementById("lint-go").addEventListener("click", async () => {
   }
 });
 
+// -------------------- hallucination --------------------
+
+function renderHalluStats(findings) {
+  const total = findings.length;
+  if (!total) return "<p class=\"muted\">No findings recorded.</p>";
+  const byVerdict = {};
+  const byType = {};
+  const byLayer = { 1: 0, 2: 0, 3: 0 };
+  for (const f of findings) {
+    byVerdict[f.verdict] = (byVerdict[f.verdict] || 0) + 1;
+    byType[f.type] = (byType[f.type] || 0) + 1;
+    byLayer[f.layer] = (byLayer[f.layer] || 0) + 1;
+  }
+  const verdictOrder = ["supported", "contradicted", "unverifiable", "hallucination"];
+  const typeOrder = ["factual", "quantitative", "relational", "temporal", "negation", "synthesis"];
+  const row = (label, val) =>
+    `<li><span class="mono">${escapeHtml(label)}</span>: <strong>${val}</strong></li>`;
+  let html = `<p><strong>${total}</strong> findings total.</p>`;
+  html += "<p><strong>By verdict</strong></p><ul>";
+  for (const v of verdictOrder) html += row(v, byVerdict[v] || 0);
+  html += "</ul>";
+  html += "<p><strong>By layer</strong></p><ul>";
+  for (const l of [1, 2, 3]) html += row(`layer ${l}`, byLayer[l] || 0);
+  html += "</ul>";
+  html += "<p><strong>By claim type</strong></p><ul>";
+  for (const t of typeOrder) if (byType[t]) html += row(t, byType[t]);
+  html += "</ul>";
+  return html;
+}
+
+async function loadHalluReport() {
+  try {
+    const res = await getJSON("/api/hallucination-report");
+    document.getElementById("hallu-report").innerHTML = res.content_html;
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+document.getElementById("hallu-go").addEventListener("click", async () => {
+  const btn = document.getElementById("hallu-go");
+  const status = document.getElementById("hallu-status");
+  btn.disabled = true;
+  setStatus(status, "Running hallucination sweep... the agent may take a while.");
+  try {
+    const res = await postJSON("/api/hallucination-check", {});
+    setStatus(status, `Done — ${res.findings.length} findings.`);
+    document.getElementById("hallu-stats-card").hidden = false;
+    document.getElementById("hallu-summary").innerHTML = tinyMarkdown(res.summary);
+    document.getElementById("hallu-stats").innerHTML = renderHalluStats(res.findings);
+    await loadHalluReport();
+    renderTrace(document.getElementById("hallu-trace"), res.trace);
+  } catch (e) {
+    setStatus(status, e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Show the previous report when the user opens the tab for the first time.
+document.querySelector('.tab[data-tab="hallucination"]').addEventListener("click", () => {
+  const reportEl = document.getElementById("hallu-report");
+  if (!reportEl.innerHTML.trim()) loadHalluReport();
+});
+
 // -------------------- browse --------------------
 
 async function refreshPageList() {
