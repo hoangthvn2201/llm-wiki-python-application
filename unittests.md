@@ -47,80 +47,80 @@ Statuses on individual bullets reflect the *test*, not the production code. Prod
 ### 3.1 `app/wiki.py`
 
 #### `_ensure_slug(name: str) -> str` ✅
-1. Accepts valid kebab-case (`a`, `ab-c`, `1page`, `mitochondria`). ✅ (covered by `test_write_and_read_page` via `write_page`)
-2. Rejects invalid forms: spaces, slashes, uppercase, empty, leading hyphen, `..`. ✅ (`test_invalid_slug_rejected`)
-3. Strips surrounding whitespace before matching. ❌
-4. Returns the *stripped* name so callers see canonical form. ❌
+1. Accepts valid kebab-case. ✅
+2. Rejects invalid forms. ✅
+3. Strips surrounding whitespace before matching. ✅
+4. Returns the *stripped* name so callers see canonical form. ✅
 
-#### `Wiki.__init__(root: Path) -> None` 🟡
-1. Expands `~` in the supplied root. ❌
-2. Resolves relative paths to absolute. ❌
-3. Does not touch the filesystem (no `ensure()` side effect). ❌
+#### `Wiki.__init__(root: Path) -> None` ✅
+1. Expands `~` in the supplied root. ✅
+2. Resolves relative paths to absolute. ✅
+3. Does not touch the filesystem. ✅
 
 #### `Wiki.ensure() -> None` ✅
-1. Creates `root/`, `raw/`, `wiki/`. ✅ (`test_ensure_creates_layout`)
+1. Creates `root/`, `raw/`, `wiki/`. ✅
 2. Creates `index.md`, `log.md`, `SCHEMA.md` when missing. ✅
-3. Idempotent — preserves existing content on second call. ✅ (`test_ensure_is_idempotent_and_preserves_content`)
-4. Default `index.md` contains the four section headers (Entities, Concepts, Sources, Reports). ❌
-5. Default `SCHEMA.md` equals the `DEFAULT_SCHEMA` constant. ❌
-6. Default `log.md` is `"# Log\n\n"`. ❌
+3. Idempotent — preserves existing content on second call. ✅
+4. Default `index.md` contains the four section headers (Entities, Concepts, Sources, Reports). ✅
+5. Default `SCHEMA.md` equals the `DEFAULT_SCHEMA` constant. ✅
+6. Default `log.md` is `"# Log\n\n"`. ✅
+7. Does not overwrite a custom schema on re-ensure. ✅
 
-#### `Wiki._safe_path(*parts: str) -> Path` 🟡
-1. Returns a path under `root` for normal parts. ❌ (positive case)
-2. Raises `ValueError` for `..` traversal. ✅ (`test_path_traversal_blocked`)
-3. Raises `ValueError` when an absolute path is passed (e.g. `_safe_path("/etc/passwd")`). ❌
+#### `Wiki._safe_path(*parts: str) -> Path` ✅
+1. Returns a path under `root` for normal parts. ✅
+2. Raises `ValueError` for `..` traversal. ✅
+3. Raises `ValueError` when an absolute path is passed. ✅
 
-#### `Wiki.list_pages() -> list[str]` 🟡
+#### `Wiki.list_pages() -> list[str]` ✅
 1. Returns sorted slug stems of `wiki/*.md`. ✅
-2. Returns `[]` when no pages exist. ❌
-3. Ignores non-`.md` files and subdirectories under `wiki/`. ❌
+2. Returns `[]` when no pages exist. ✅
+3. Ignores non-`.md` files and subdirectories under `wiki/`. ✅
 
 #### `Wiki.page_exists(name: str) -> bool` ✅
 1. `True` after `write_page`. ✅
 2. `False` for missing page. ✅
-3. Raises `ValueError` for invalid slug. ❌
+3. Raises `ValueError` for invalid slug. ✅
 
 #### `Wiki.read_page(name: str) -> str` ✅
 1. Returns UTF-8 content of an existing page. ✅
-2. Raises `FileNotFoundError` for missing page. ✅ (`test_read_missing_page_raises`)
-3. Raises `ValueError` for invalid slug (e.g. `".."`). ✅ (`test_path_traversal_blocked`)
-4. Round-trips non-ASCII (emoji, accents). ❌
+2. Raises `FileNotFoundError` for missing page. ✅
+3. Raises `ValueError` for invalid slug. ✅
+4. Round-trips non-ASCII (emoji, accents). ✅ (via `write_page` test)
 
 #### `Wiki.write_page(name: str, content: str) -> None` ✅
 1. Creates a new page. ✅
-2. Overwrites an existing page (no append). ❌
+2. Overwrites an existing page (no append). ✅
 3. Rejects invalid slug with `ValueError`. ✅
-4. Persists content as UTF-8 (round-trips emoji / accents). ❌
+4. Persists content as UTF-8 (round-trips emoji / accents). ✅
 
 #### `Wiki.delete_page(name: str) -> None` ✅
-1. Removes an existing page. ✅ (`test_delete_page`)
-2. No-op when page is missing (no exception). ✅
-3. Rejects invalid slug. ❌
+1. Removes an existing page. ✅
+2. No-op when page is missing. ✅
+3. Rejects invalid slug. ✅
 
-#### `Wiki.read_index() -> str` / `Wiki.write_index(content: str) -> None` 🟡
-1. `write_index` then `read_index` round-trips the supplied content exactly. ❌
-2. `read_index` reads what `ensure()` seeded. (indirectly ✅ via `test_ensure_is_idempotent_and_preserves_content`)
+#### `Wiki.read_index() -> str` / `Wiki.write_index(content: str) -> None` ✅
+1. `write_index` then `read_index` round-trips the supplied content exactly. ✅
 
-#### `Wiki.read_log() -> str` / `Wiki.append_log(entry: str) -> None` 🟡
-1. Appended entry shows up in `read_log()`. ✅ (`test_append_log_adds_dated_entry`)
-2. Inserts a blank line separator before the new entry when the file did not already end with `\n\n`. ❌
-3. Strips trailing whitespace from `entry` and ensures the file ends with exactly one trailing newline. ❌
-4. Initialises log with `"# Log\n\n"` when `log.md` does not exist on disk. ❌
-5. Two successive calls produce two distinct entries with the blank-line separator between them. ❌
+#### `Wiki.read_log() -> str` / `Wiki.append_log(entry: str) -> None` ✅
+1. Appended entry shows up in `read_log()`. ✅
+2. Inserts a blank line separator before the new entry when the file did not already end with `\n\n`. ✅
+3. Strips trailing whitespace from `entry` and ensures the file ends with exactly one trailing newline. ✅
+4. Initialises log with `"# Log\n\n"` when `log.md` does not exist on disk. ✅
+5. Two successive calls produce two distinct entries with the blank-line separator between them. ✅
 
 #### `Wiki.log_entry_header(op: str, title: str) -> str` ✅
-1. Format is `## [YYYY-MM-DD] <op> | <title>` using today's ISO date. ✅ (indirectly) — add a direct test.
+1. Format is `## [YYYY-MM-DD] <op> | <title>` using today's ISO date — asserted directly. ✅
 
-#### `Wiki.read_schema() -> str` / `Wiki.write_schema(content: str) -> None` ❌
-1. `write_schema` then `read_schema` round-trips. ❌
-2. `ensure()` does not overwrite a custom schema (already covered by idempotent-ensure, but assert it specifically for `SCHEMA.md`). ❌
+#### `Wiki.read_schema() -> str` / `Wiki.write_schema(content: str) -> None` ✅
+1. `write_schema` then `read_schema` round-trips. ✅
+2. `ensure()` does not overwrite a custom schema. ✅
 
-#### `Wiki.list_raw() -> list[str]` / `Wiki.read_raw(name) -> str` / `Wiki.write_raw(name, content) -> Path` 🟡
-1. Round-trip (`write_raw` → `list_raw` → `read_raw`). ✅ (`test_raw_round_trip`)
-2. `write_raw` returns the resolved `Path` of the written file. ❌
-3. `read_raw` raises `FileNotFoundError` for a missing source. ❌
-4. `read_raw` rejects invalid slug. ❌
-5. `list_raw` returns sorted slugs and `[]` when empty. ❌
+#### `Wiki.list_raw() -> list[str]` / `Wiki.read_raw(name) -> str` / `Wiki.write_raw(name, content) -> Path` ✅
+1. Round-trip (`write_raw` → `list_raw` → `read_raw`). ✅
+2. `write_raw` returns the resolved `Path` of the written file. ✅
+3. `read_raw` raises `FileNotFoundError` for a missing source. ✅
+4. `read_raw` rejects invalid slug. ✅
+5. `list_raw` returns sorted slugs and `[]` when empty. ✅
 
 ---
 
@@ -154,45 +154,43 @@ All tests in a new `tests/test_config.py`. Each test resets `app.config._setting
 ### 3.3 `app/tools.py`
 
 #### `Tool.schema()` ✅
-1. Returns `{"type": "function", "function": {"name", "description", "parameters"}}` shape. ✅ (`test_all_tool_schemas_well_formed`)
+1. Returns `{"type": "function", "function": {"name", "description", "parameters"}}` shape. ✅
 2. `parameters.type == "object"`. ✅
 
 #### `schemas_for(allowed: list[str]) -> list[dict]` ✅
-1. Returns only schemas whose name is in `allowed`. ✅ (`test_schemas_for_filters_to_allowed`)
-2. `READ_ONLY_TOOLS` result excludes mutating tools (`write_page`, `write_index`, `append_log`). ✅ (partial)
-3. Silently drops unknown names in `allowed` (does not raise). ❌
+1. Returns only schemas whose name is in `allowed`. ✅
+2. `READ_ONLY_TOOLS` result excludes mutating tools. ✅
+3. Silently drops unknown names in `allowed` (does not raise). ✅
 
-#### `dispatch(wiki, name, raw_args) -> str` 🟡
-1. Unknown tool → string starting with `ERROR`. ✅ (`test_dispatch_unknown_tool_returns_error_string`)
-2. Invalid JSON → string starting with `ERROR`. ✅ (`test_dispatch_invalid_json_returns_error`)
-3. Non-object JSON args (`"42"`, `"[1, 2]"`) → `ERROR: tool arguments must be a JSON object`. ❌
-4. Handler `ValueError` → `ERROR: <msg>`. ✅ (`test_write_page_invalid_slug_returns_error`)
-5. Handler `FileNotFoundError` → `ERROR: <msg>` (e.g. `read_page` of a missing page). ❌
-6. Unexpected exception → `ERROR: unexpected <Type>: <msg>` (simulate by monkeypatching a handler to raise `RuntimeError`). ❌
-7. Empty `raw_args` (`""`) defaults to `{}`. ❌
+#### `dispatch(wiki, name, raw_args) -> str` ✅
+1. Unknown tool → string starting with `ERROR`. ✅
+2. Invalid JSON → string starting with `ERROR`. ✅
+3. Non-object JSON args (`"42"`, `"[1, 2]"`) → `ERROR: tool arguments must be a JSON object`. ✅
+4. Handler `ValueError` → `ERROR: <msg>`. ✅
+5. Handler `FileNotFoundError` → `ERROR: <msg>`. ✅
+6. Unexpected exception → `ERROR: unexpected <Type>: <msg>`. ✅ (monkeypatched handler raises `RuntimeError`)
+7. Empty `raw_args` (`""`) defaults to `{}`. ✅
 
-#### Tool handlers (`_list_pages`, `_read_page`, `_write_page`, `_read_index`, `_write_index`, `_append_log`, `_read_schema`, `_list_raw`, `_read_raw`, `_finish`)
+#### Tool handlers (`_list_pages`, `_read_page`, `_write_page`, `_read_index`, `_write_index`, `_append_log`, `_read_schema`, `_list_raw`, `_read_raw`, `_finish`) ✅
 
-Each handler is exercised via `dispatch(wiki, name, json.dumps(args))` to also pin the JSON-parsing contract.
-
-1. `_list_pages` empty → `"(no wiki pages yet)"`. ❌
-2. `_list_pages` with pages → newline-joined slugs. ❌
-3. `_read_page` returns the page content. ❌ (covered indirectly only)
-4. `_write_page` returns `"created wiki/<name>.md (<n> chars)"` for new page. ✅ (`test_write_page_via_dispatch_then_list`)
-5. `_write_page` returns `"updated wiki/<name>.md (<n> chars)"` when page already exists. ❌
+1. `_list_pages` empty → `"(no wiki pages yet)"`. ✅
+2. `_list_pages` with pages → newline-joined sorted slugs. ✅
+3. `_read_page` returns the page content. ✅
+4. `_write_page` returns `"created wiki/<name>.md (...)"` for new page. ✅
+5. `_write_page` returns `"updated ..."` when page already exists. ✅
 6. `_read_index` returns current `index.md` content. ✅
-7. `_write_index` writes and returns confirmation string with char count. ❌
-8. `_append_log` returns `"appended <n> chars to log.md"`. ✅ (`test_append_log_via_dispatch`)
-9. `_read_schema` returns current schema. ❌
-10. `_list_raw` empty → `"(no raw sources)"`; with raws → newline-joined slugs. ❌
-11. `_read_raw` returns raw content; missing raw → `ERROR: ...` via dispatch. ❌
-12. `_finish` returns `"FINISHED: <summary>"`; missing summary → `"FINISHED: (no summary)"`. ❌
+7. `_write_index` writes and returns confirmation string with char count. ✅
+8. `_append_log` returns `"appended <n> chars to log.md"`. ✅
+9. `_read_schema` returns current schema. ✅
+10. `_list_raw` empty → `"(no raw sources)"`; with raws → newline-joined sorted slugs. ✅
+11. `_read_raw` returns raw content; missing raw → `ERROR: ...` via dispatch. ✅
+12. `_finish` returns `"FINISHED: <summary>"`; missing summary → `"FINISHED: (no summary)"`. ✅
 
 #### Tool sets ✅
-1. `READ_ONLY_TOOLS` excludes all write/append tools. ✅ (partial — pin every excluded name)
-2. `INGEST_TOOLS` is a superset of `READ_ONLY_TOOLS`. ✅ (`test_ingest_tools_is_superset_of_read_only`)
-3. `LINT_TOOLS == list(ALL_TOOLS.keys())` (i.e. lint can do anything). ❌
-4. Every name in `READ_ONLY_TOOLS`/`INGEST_TOOLS`/`LINT_TOOLS` exists in `ALL_TOOLS`. ❌
+1. `READ_ONLY_TOOLS` excludes every mutating tool (`write_page`/`write_index`/`append_log`). ✅
+2. `INGEST_TOOLS` is a superset of `READ_ONLY_TOOLS`. ✅
+3. `LINT_TOOLS == list(ALL_TOOLS.keys())`. ✅
+4. Every name in `READ_ONLY_TOOLS`/`INGEST_TOOLS`/`LINT_TOOLS` exists in `ALL_TOOLS`. ✅
 
 ---
 
@@ -389,17 +387,17 @@ Both paths are bound to the same handler.
 ### 3.9 `app/ingest/pdf/base.py`
 
 #### `ExtractedPdf` dataclass ✅
-1. Fields `text`, `page_count`, `metadata` constructible. ✅ (used throughout)
-2. Default `metadata` is a fresh dict per instance (not a shared mutable default). ❌
+1. Fields `text`, `page_count`, `metadata` constructible. ✅
+2. Default `metadata` is a fresh dict per instance (not a shared mutable default). ✅
 
 #### `PdfExtractor` ABC ✅
-1. Cannot be instantiated directly. ✅ (`test_pdf_extractor_is_abstract`)
-2. Subclass without `extract` cannot be instantiated. ✅ (`test_subclass_without_extract_is_abstract`)
-3. Subclass without `name` cannot be instantiated. ❌
+1. Cannot be instantiated directly. ✅
+2. Subclass without `extract` cannot be instantiated. ✅
+3. Subclass without `name` cannot be instantiated. ✅
 
 #### `PdfExtractionError` ✅
-1. Subclass of `Exception`. ❌
-2. Raised explicitly by `PypdfExtractor` (covered transitively). ✅
+1. Subclass of `Exception`. ✅
+2. Raised explicitly by `PypdfExtractor`. ✅
 
 ---
 
@@ -408,16 +406,16 @@ Both paths are bound to the same handler.
 #### `PypdfExtractor.name` ✅
 1. Equal to `"pypdf"`. ✅ (`test_extractor_name_is_stable`)
 
-#### `PypdfExtractor.extract(data, *, filename=None)` 🟡
+#### `PypdfExtractor.extract(data, *, filename=None)` ✅
 1. Returns `ExtractedPdf` with combined text and correct `page_count`. ✅
 2. Includes `## Page N` markers between pages. ✅
 3. Strips leading `/` from metadata keys (`/Title` → `Title`). ✅
 4. Empty bytes → `PdfExtractionError("PDF data is empty")`. ✅
 5. Corrupt bytes → `PdfExtractionError`. ✅
-6. **Password-protected PDF** → `PdfExtractionError("PDF is password-protected")`. ❌ Requires `tests/fixtures/encrypted.pdf` (generate once with pypdf, commit).
-7. **All-blank pages** → `PdfExtractionError("PDF contains no extractable text...")`. ❌ Requires `tests/fixtures/blank.pdf`.
-8. **Per-page failure** does not abort extraction; the failing page is replaced by `[page N: extraction failed: ...]` and other pages still extract. ❌ (simulate by monkeypatching `PdfReader.pages` with a list whose item N raises on `extract_text()`).
-9. `filename` argument is accepted (kwarg-only) and currently unused — passing it does not change output. ❌
+6. Password-protected PDF → `PdfExtractionError("PDF is password-protected")`. ✅ (fixture generated at test time via `PdfWriter.encrypt`).
+7. All-blank pages → `PdfExtractionError` mentioning `scanned/image-only`. ✅ (fixture generated at test time).
+8. Per-page failure does not abort extraction; placeholder `[page N: extraction failed: ...]` appears in the joined text alongside other pages. ✅ (monkeypatched `PdfReader` returns a mixed list of `_FakePage`s).
+9. `filename` argument is accepted (kwarg-only) — passing it does not change output. ✅
 
 ---
 
@@ -426,33 +424,30 @@ Both paths are bound to the same handler.
 #### `get_pdf_extractor(backend="pypdf")` ✅
 1. Default backend returns `PypdfExtractor`. ✅
 2. Unknown backend raises `ValueError`. ✅
-3. Returned object is an instance of `PdfExtractor` (interface check). ❌
+3. Returned object is an instance of `PdfExtractor` (interface check). ✅
 
 ---
 
-## 4. Cross-cutting tests
+## 4. Cross-cutting tests ✅
 
-These ride on top of the per-function tests and pin behaviour that spans modules.
+All in `tests/test_cross_cutting.py`. Reuses `_FakeClient`/`_FakeMessage`/`_FakeToolCall` from `tests/test_llm.py` for end-to-end drives.
 
-### 4.1 Path traversal — security
-1. Every entry point that takes a `name` slug rejects `..`, absolute paths, and paths with separators:
-   - `Wiki.read_page("..")`, `Wiki.read_page("/etc/passwd")`, `Wiki.read_raw(...)` (covered for `..`).
-   - `dispatch(wiki, "read_page", json.dumps({"name": ".."}))` → `ERROR`.
-   - `GET /api/page/..` → 404 (FastAPI path validation may make this a 404 by URL parsing; assert behaviour).
+### 4.1 Path traversal — security ✅
+1. `Wiki.read_page(...)` rejects `..`, `../escape`, `Bad Slug`, `etc/passwd`, empty string. ✅
+2. `dispatch(wiki, "read_page", ...)` with a bad slug returns `ERROR ...`. ✅
+3. `GET /api/page/Bad` → 404 (handler maps `ValueError` to 404). ✅
+4. `Wiki.write_raw` also rejects bad slugs — boundary is symmetric across read and write. ✅
 
-### 4.2 Read-only contract
-1. `schemas_for(READ_ONLY_TOOLS)` returns no tool whose name contains `"write"` or `"append"`.
-2. With a `_FakeClient` that tries to emit a `write_page` tool_call during a `chat` session, the loop dispatches it (because dispatch doesn't filter — the model just shouldn't see it). Assert that the OpenAI request did NOT include `write_page` in its `tools` list. This is the actual enforcement boundary.
+### 4.2 Read-only contract ✅
+1. `schemas_for(READ_ONLY_TOOLS)` contains no `write_page` / `write_index` / `append_log`. ✅
+2. End-to-end `operations.chat(...)` drives the real `run_loop`; the actual OpenAI request never names a mutating tool in its `tools` list — even when the user asks for one. ✅
+3. End-to-end `operations.query(...)` — same contract pinned independently. ✅
 
-### 4.3 Trace contract
-1. Every `TraceStep` in any `run_loop` output has:
-   - `tool` is a `str`.
-   - `args` is a `dict`.
-   - `result_preview` is a `str` and either `len(result_preview) <= 400` or it ends with the `"... (N more chars)"` suffix.
-2. Trace never contains the full text of a file longer than 400 chars (write a 10kB page, read it via a tool call, assert truncation).
-
-### 4.4 End-to-end smoke (single test, optional)
-1. With a scripted `_FakeClient` that emits one `read_index` call then `finish`, drive `operations.query("what's here?")` end-to-end and assert the `QueryResult.answer` and `trace` shapes.
+### 4.3 Trace contract ✅
+1. Every `TraceStep` has `tool: str`, `args: dict`, `result_preview: str`. ✅
+2. `result_preview` is either ≤ 400 chars or ends with `" more chars)"` suffix — pinned across an entire end-to-end trace. ✅
+3. Reading a 10 000-char page leaves the full body absent from every trace preview (no content leakage). ✅
+4. Invalid JSON args still surface as a dict (`{"_raw": "<raw>"}`) so consumers can serialise without special-casing. ✅
 
 ---
 
@@ -460,17 +455,17 @@ These ride on top of the per-function tests and pin behaviour that spans modules
 
 | Module | Status | Notes |
 |---|---|---|
-| `app/wiki.py` | 🟡 | Most behaviour covered; missing `read_schema`/`write_schema`, edge cases for `append_log`, UTF-8 round-trip, slug validation on read paths. |
+| `app/wiki.py` | ✅ | Full coverage — schema r/w, `append_log` edges, UTF-8, slug validation on every read path, `_safe_path` injection, `__init__` resolution. |
 | `app/config.py` | ✅ | `test_config.py` — defaults, env-var binding, `workspace_path` resolution, singleton. |
-| `app/tools.py` | 🟡 | Dispatch + sets covered; need error branches, "updated" vs "created" path, every handler's happy path, `_finish`/`_list_raw`/`_read_schema` direct tests. |
+| `app/tools.py` | ✅ | Full coverage — every handler, every dispatch error branch, every tool set contract. |
 | `app/llm.py` | ✅ | `test_llm.py` — `_preview`, `AgentResult`, `_client`, `run_agent`, `run_loop` (12+ behaviours) via scripted `_FakeClient`. |
 | `app/prompts.py` | ✅ | `test_prompts.py` — required-tool mentions per prompt, READ-ONLY declarations, cross-reference syntax. |
 | `app/schemas.py` | ✅ | `test_schemas.py` — required-field contract, default-factory isolation, md-only views. |
 | `app/operations.py` | ✅ | `test_operations.py` + extended `test_ingest_pdf.py` — every orchestrator covered with `run_agent`/`run_loop` spies. |
 | `app/main.py` | ✅ | `test_main.py` — every route via `TestClient`, error mapping, file-upload routing, `_render_md` extensions. |
-| `app/ingest/pdf/base.py` | ✅ | Extend ABC tests for missing `name` property; pin default-dict-not-shared. |
-| `app/ingest/pdf/pypdf_backend.py` | 🟡 | Add encrypted-PDF and blank-PDF fixtures; add per-page-failure simulation test. |
-| `app/ingest/pdf/__init__.py` | ✅ | Add an `isinstance(result, PdfExtractor)` assertion. |
+| `app/ingest/pdf/base.py` | ✅ | Full coverage incl. missing-`name` ABC + `ExtractedPdf` default-dict isolation. |
+| `app/ingest/pdf/pypdf_backend.py` | ✅ | Encrypted, blank, and per-page-failure cases covered; fixtures are generated at runtime (no binary blobs in git). |
+| `app/ingest/pdf/__init__.py` | ✅ | Default + unknown backend + `isinstance(result, PdfExtractor)`. |
 
 ---
 
