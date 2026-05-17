@@ -41,7 +41,15 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(
         operations,
         "get_settings",
-        lambda: SimpleNamespace(workspace_path=ws),
+        lambda: SimpleNamespace(
+            workspace_path=ws,
+            max_tool_iterations=25,
+            max_tool_iterations_ingest=25,
+            max_tool_iterations_query=25,
+            max_tool_iterations_chat=25,
+            max_tool_iterations_lint=50,
+            max_tool_iterations_hallucination=150,
+        ),
     )
     return ws
 
@@ -56,12 +64,13 @@ def _capture_run_agent(
     inspect after the call (`wiki`, `system_prompt`, `user_prompt`, `allowed_tools`)."""
     captured: dict[str, Any] = {}
 
-    def fake_run_agent(*, wiki, system_prompt, user_prompt, allowed_tools):
+    def fake_run_agent(*, wiki, system_prompt, user_prompt, allowed_tools, **extra):
         captured.update(
             wiki=wiki,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             allowed_tools=allowed_tools,
+            **extra,
         )
         return AgentResult(final_text=final_text, trace=trace or [])
 
@@ -77,12 +86,13 @@ def _capture_run_loop(
 ) -> dict[str, Any]:
     captured: dict[str, Any] = {}
 
-    def fake_run_loop(*, wiki, messages, allowed_tools):
+    def fake_run_loop(*, wiki, messages, allowed_tools, **extra):
         # Snapshot messages so later mutation doesn't confuse the assertion.
         captured.update(
             wiki=wiki,
             messages=[dict(m) for m in messages],
             allowed_tools=allowed_tools,
+            **extra,
         )
         return AgentResult(final_text=final_text, trace=trace or [])
 
@@ -109,7 +119,7 @@ def test_ingest_writes_raw_source_before_calling_run_agent(
 ):
     seen: dict[str, bool] = {}
 
-    def fake_run_agent(*, wiki, **_kw):
+    def fake_run_agent(*, wiki, **_kw):  # noqa: ARG001 — kwargs absorbed for forward compat
         seen["raw_exists_when_agent_runs"] = (workspace / "raw" / "my-src.md").is_file()
         return AgentResult(final_text="ok", trace=[])
 
@@ -314,12 +324,13 @@ def _capture_run_agent_with_findings(
     `report_finding` would do during a real agent run."""
     captured: dict[str, Any] = {}
 
-    def fake_run_agent(*, wiki, system_prompt, user_prompt, allowed_tools):
+    def fake_run_agent(*, wiki, system_prompt, user_prompt, allowed_tools, **extra):
         captured.update(
             wiki=wiki,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             allowed_tools=allowed_tools,
+            **extra,
         )
         wiki._hallucination_findings = list(findings)
         return AgentResult(final_text=final_text, trace=[])
@@ -337,6 +348,47 @@ def test_hallucination_check_uses_correct_system_and_tools(
 
     assert captured["system_prompt"] == HALLUCINATION_SYSTEM
     assert captured["allowed_tools"] == HALLUCINATION_TOOLS
+
+
+def test_hallucination_check_uses_hallucination_iteration_cap(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+):
+    captured = _capture_run_agent(monkeypatch)
+
+    operations.hallucination_check()
+
+    # Per-op cap — defaults to 150 in Settings; the fixture sets the same value.
+    assert captured.get("max_iterations") == 150
+
+
+def test_ingest_uses_ingest_iteration_cap(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+):
+    captured = _capture_run_agent(monkeypatch)
+
+    operations.ingest("my-src", "body")
+
+    assert captured.get("max_iterations") == 25
+
+
+def test_lint_uses_lint_iteration_cap(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+):
+    captured = _capture_run_agent(monkeypatch)
+
+    operations.lint()
+
+    assert captured.get("max_iterations") == 50
+
+
+def test_chat_uses_chat_iteration_cap(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+):
+    captured = _capture_run_loop(monkeypatch)
+
+    operations.chat([ChatMessage(role="user", content="hi")])
+
+    assert captured.get("max_iterations") == 25
 
 
 def test_hallucination_check_writes_report_file(

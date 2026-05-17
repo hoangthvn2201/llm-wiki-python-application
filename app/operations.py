@@ -50,6 +50,7 @@ def ingest(source_name: str, content: str) -> IngestResult:
         system_prompt=INGEST_SYSTEM,
         user_prompt=user_prompt,
         allowed_tools=INGEST_TOOLS,
+        max_iterations=get_settings().max_tool_iterations_ingest,
     )
     return IngestResult(summary=result.final_text, trace=result.trace)
 
@@ -87,6 +88,7 @@ def query(question: str) -> QueryResult:
         system_prompt=QUERY_SYSTEM,
         user_prompt=user_prompt,
         allowed_tools=READ_ONLY_TOOLS,
+        max_iterations=get_settings().max_tool_iterations_query,
     )
     return QueryResult(answer=result.final_text, trace=result.trace)
 
@@ -110,6 +112,7 @@ def chat(history: list[ChatMessage]) -> ChatResponse:
         wiki=wiki,
         messages=messages,
         allowed_tools=READ_ONLY_TOOLS,
+        max_iterations=get_settings().max_tool_iterations_chat,
     )
     return ChatResponse(reply=result.final_text, trace=result.trace)
 
@@ -200,6 +203,7 @@ def hallucination_check() -> HallucinationCheckResult:
         system_prompt=HALLUCINATION_SYSTEM,
         user_prompt=user_prompt,
         allowed_tools=HALLUCINATION_TOOLS,
+        max_iterations=get_settings().max_tool_iterations_hallucination,
     )
 
     findings = list(getattr(wiki, "_hallucination_findings", []))
@@ -222,5 +226,6 @@ def lint() -> LintResult:
         system_prompt=LINT_SYSTEM,
         user_prompt=user_prompt,
         allowed_tools=LINT_TOOLS,
+        max_iterations=get_settings().max_tool_iterations_lint,
     )
     return LintResult(report=result.final_text, trace=result.trace)

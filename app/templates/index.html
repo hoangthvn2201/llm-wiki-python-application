@@ -200,6 +200,7 @@
           <button id="hallu-go" class="btn-primary"><span class="btn-glyph">▶</span> Run sweep</button>
           <div id="hallu-status" class="status"></div>
         </div>
+        <p class="hallu-warn muted"><strong>⚠ Heads up:</strong> a full sweep emits one tool call per claim and can consume a large number of AI tokens. For routine runs, consider pointing <code>OPENAI_BASE_URL</code> at a locally-hosted LLM (e.g. Ollama).</p>
       </div>
 
       <section class="card result-card" id="hallu-stats-card" hidden>
