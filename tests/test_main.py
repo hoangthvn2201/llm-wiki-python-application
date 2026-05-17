@@ -15,7 +15,14 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.main import _render_md, app
-from app.schemas import ChatResponse, IngestResult, LintResult, QueryResult, TraceStep
+from app.schemas import (
+    ChatResponse,
+    HallucinationCheckResult,
+    IngestResult,
+    LintResult,
+    QueryResult,
+    TraceStep,
+)
 from app.wiki import Wiki
 
 
@@ -315,6 +322,75 @@ def test_post_lint_returns_lint_result(
 
     assert res.status_code == 200
     assert res.json() == {"report": "all good", "trace": []}
+
+
+# ============================================ POST /api/hallucination-check
+
+def test_post_hallucination_check_returns_result_shape(
+    workspace: Path, client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    canned = HallucinationCheckResult(
+        summary="audit done",
+        findings=[],
+        report_path="hallucination-report.md",
+        trace=[],
+    )
+    monkeypatch.setattr(main, "hallucination_check", lambda: canned)
+
+    res = client.post("/api/hallucination-check")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["summary"] == "audit done"
+    assert body["findings"] == []
+    assert body["report_path"] == "hallucination-report.md"
+    assert body["trace"] == []
+
+
+def test_post_hallucination_check_accepts_empty_body(
+    workspace: Path, client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    # The endpoint declares no request body — POST with neither json nor data
+    # must still succeed.
+    monkeypatch.setattr(
+        main,
+        "hallucination_check",
+        lambda: HallucinationCheckResult(
+            summary="ok", findings=[], report_path="hallucination-report.md", trace=[]
+        ),
+    )
+
+    res = client.post("/api/hallucination-check")
+
+    assert res.status_code == 200
+
+
+# ============================================ GET /api/hallucination-report
+
+def test_get_hallucination_report_returns_index_view_when_file_exists(
+    workspace: Path, client: TestClient
+):
+    (workspace / "hallucination-report.md").write_text(
+        "# Hallucination Report\n\n## Statistics\n\n- Total findings: 0\n",
+        encoding="utf-8",
+    )
+
+    res = client.get("/api/hallucination-report")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert "# Hallucination Report" in body["content_md"]
+    assert "<h1" in body["content_html"]
+
+
+def test_get_hallucination_report_returns_404_when_file_missing(
+    workspace: Path, client: TestClient
+):
+    # The fresh workspace fixture deliberately does not create the report file.
+    res = client.get("/api/hallucination-report")
+
+    assert res.status_code == 404
+    assert "no hallucination report yet" in res.json()["detail"]
 
 
 # ======================================================== GET /api/pages

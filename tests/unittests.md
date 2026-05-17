@@ -134,12 +134,14 @@ All tests in a new `tests/test_config.py`. Each test resets `app.config._setting
 3. `model_name` defaults to `"gpt-4o-mini"`. ✅
 4. `workspace_dir` defaults to `Path("./workspace")`. ✅
 5. `max_tool_iterations` defaults to `25` (int). ✅
+6. Per-op iteration caps default sensibly: `_ingest=25`, `_query=25`, `_chat=25`, `_lint=50`, `_hallucination=150`. ✅ (`test_settings_per_op_iteration_cap_defaults`)
 
 #### `Settings` env-var binding ✅
 1. `OPENAI_API_KEY=abc` is read into `openai_api_key`. ✅
 2. `MAX_TOOL_ITERATIONS=5` is parsed as `int` (not str). ✅
 3. `WORKSPACE_DIR=/tmp/foo` is coerced to `Path("/tmp/foo")`. ✅
 4. Unknown env vars are ignored (`extra="ignore"`). ✅
+5. `MAX_TOOL_ITERATIONS_HALLUCINATION=200` binds to `max_tool_iterations_hallucination` as int (parametrized across all five per-op caps). ✅ (`test_settings_per_op_iteration_caps_bind_from_env`)
 
 #### `Settings.workspace_path` ✅
 1. Expands `~` in `workspace_dir`. ✅
@@ -171,6 +173,16 @@ All tests in a new `tests/test_config.py`. Each test resets `app.config._setting
 6. Unexpected exception → `ERROR: unexpected <Type>: <msg>`. ✅ (monkeypatched handler raises `RuntimeError`)
 7. Empty `raw_args` (`""`) defaults to `{}`. ✅
 
+#### `_report_finding(wiki, args) -> str` ✅
+1. Records a well-formed finding on `wiki._hallucination_findings` (lazy-inits the list if absent). ✅ (`test_report_finding_accumulates_on_wiki`)
+2. Two successive calls produce two distinct entries in order. ✅
+3. Rejects unknown `type` with `ERROR:` mentioning the bad value. ✅ (`test_report_finding_rejects_bad_type`)
+4. Rejects unknown `verdict` with `ERROR:`. ✅ (`test_report_finding_rejects_bad_verdict`)
+5. Rejects `layer` outside `{1, 2, 3}` with `ERROR:`. ✅ (`test_report_finding_rejects_bad_layer`)
+6. Missing required field (`page` / `claim` / `type` / `layer` / `verdict`) → `ERROR:` mentioning the field. ✅ (`test_report_finding_missing_required_field`)
+7. `evidence` is optional and defaults to `""`. ✅ (covered in accumulation test)
+8. Return string includes `type`, `verdict`, `page`, and the layer (acks a human-readable record). ✅
+
 #### Tool handlers (`_list_pages`, `_read_page`, `_write_page`, `_read_index`, `_write_index`, `_append_log`, `_read_schema`, `_list_raw`, `_read_raw`, `_finish`) ✅
 
 1. `_list_pages` empty → `"(no wiki pages yet)"`. ✅
@@ -189,8 +201,10 @@ All tests in a new `tests/test_config.py`. Each test resets `app.config._setting
 #### Tool sets ✅
 1. `READ_ONLY_TOOLS` excludes every mutating tool (`write_page`/`write_index`/`append_log`). ✅
 2. `INGEST_TOOLS` is a superset of `READ_ONLY_TOOLS`. ✅
-3. `LINT_TOOLS == list(ALL_TOOLS.keys())`. ✅
-4. Every name in `READ_ONLY_TOOLS`/`INGEST_TOOLS`/`LINT_TOOLS` exists in `ALL_TOOLS`. ✅
+3. `LINT_TOOLS` covers all tools except hallucination-only ones (`set(LINT_TOOLS) == set(ALL_TOOLS) - {"report_finding"}`). ✅ (`test_lint_tools_covers_all_except_hallucination_only`)
+4. Every name in `READ_ONLY_TOOLS`/`INGEST_TOOLS`/`LINT_TOOLS`/`HALLUCINATION_TOOLS` exists in `ALL_TOOLS`. ✅
+5. `INGEST_TOOLS` and `LINT_TOOLS` both exclude `report_finding`. ✅ (`test_ingest_and_lint_tools_exclude_report_finding`)
+6. `HALLUCINATION_TOOLS` excludes `write_page` and `write_index` (read-only over wiki) but includes `report_finding` and `append_log`. ✅ (`test_hallucination_tools_excludes_write_pages`)
 
 ---
 
@@ -229,19 +243,21 @@ class _FakeClient:
 #### `_client()` ✅
 1. Constructs `OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)`. ✅ (spy on `app.llm.OpenAI`)
 
-#### `run_agent(wiki, system_prompt, user_prompt, allowed_tools)` ✅
+#### `run_agent(wiki, system_prompt, user_prompt, allowed_tools, max_iterations=None)` ✅
 1. Builds messages `[{role:"system", ...}, {role:"user", ...}]` and delegates to `run_loop`. ✅
 2. Returns the `AgentResult` returned by `run_loop` verbatim. ✅
 3. Passes `allowed_tools` through unchanged. ✅
+4. Forwards an explicit `max_iterations` value to `run_loop`. ✅ (`test_run_agent_forwards_max_iterations_to_run_loop`)
 
-#### `run_loop(wiki, messages, allowed_tools)` ✅
+#### `run_loop(wiki, messages, allowed_tools, max_iterations=None)` ✅
 1. **Plain final answer**: when the model emits content with no `tool_calls`, returns `AgentResult(final_text=content, trace=[])`. Messages list grows by one assistant entry. ✅
 2. **`finish` short-circuit**: when the model emits a `finish` tool_call, the loop returns `AgentResult(final_text=summary, trace=[<one step>])` after one round. ✅
 3. **Single tool call**: model calls `list_pages`, loop dispatches it, appends `{role:"tool", tool_call_id, content}`, then the next round's plain content becomes `final_text`. ✅
 4. **Trace shape**: every trace entry has `tool` (str), `args` (dict), `result_preview` (str ≤ 400 chars plus optional suffix). ✅
 5. **Trace truncation does not affect model context**: a tool result of >400 chars is sent verbatim to the model (in the `tool` message) but truncated in the returned `trace`. ✅
 6. **Unknown tool name** in a tool_call still produces a trace entry whose `result_preview` starts with `ERROR`; the loop continues. ✅
-7. **Max iterations**: returns the `"(agent hit MAX_TOOL_ITERATIONS...)"` fallback after `settings.max_tool_iterations` rounds. ✅
+7. **Max iterations**: returns the `"(agent hit MAX_TOOL_ITERATIONS [N]...)"` fallback after the effective cap rounds (`max_iterations` arg if provided, else `settings.max_tool_iterations`). ✅
+7a. When called with an explicit `max_iterations=N`, exactly `N` `chat.completions.create` calls happen before the fallback is returned. ✅ (`test_run_loop_explicit_max_iterations_overrides_settings`)
 8. **Multiple tool calls in one response**: all dispatched in order; tool messages appended in same order before the next request. ✅
 9. **Invalid JSON in tool args**: `parsed_args` becomes `{"_raw": "<raw string>"}` in the trace; the `tool` message contains the dispatch error string. ✅ (also covered: non-dict JSON `42` → `{"_raw": 42}`)
 10. **In-place mutation**: caller's `messages` list grows; previously-appended messages are preserved. ✅
@@ -261,6 +277,9 @@ One sanity test per prompt to lock the workflow contract. These catch accidental
 4. `QUERY_SYSTEM` does NOT mention any write tool (`write_page`, `write_index`, `append_log`). ✅
 5. `CHAT_SYSTEM` is non-empty, mentions "READ-ONLY", `read_index`, `read_page`, `finish`, the cross-reference syntax, and redirects writes to Ingest/Lint tabs. ✅
 6. `LINT_SYSTEM` is non-empty, mentions `read_schema`, `read_index`, `read_page`, `write_page`, `write_index`, `append_log`, `finish`. ✅
+7. `HALLUCINATION_SYSTEM` is non-empty, declares "READ-ONLY" over the wiki, names every tool the workflow invokes (`read_schema`, `read_index`, `read_page`, `list_raw`, `read_raw`, `report_finding`, `append_log`, `finish`), and names every claim-type bucket (`factual`, `quantitative`, `relational`, `temporal`, `negation`, `synthesis`) and every verdict (`supported`, `contradicted`, `unverifiable`, `hallucination`). ✅ (parametrized `test_hallucination_system_mentions_required_tool`, `_mentions_claim_type`, `_mentions_verdict`, plus `_is_non_empty` and `_declares_read_only`)
+8. `HALLUCINATION_SYSTEM` actively forbids the write tools — the strings appear only under a "MUST NOT" / "do not" instruction, not as a recommended action. ✅ (`test_hallucination_system_forbids_write_tools_explicitly`)
+9. `HALLUCINATION_SYSTEM` describes the three layers in order (entity → description → claim). ✅ (`test_hallucination_system_describes_layers_in_order`)
 
 ---
 
@@ -276,6 +295,12 @@ Trust Pydantic; pin only the fields *we* depend on.
 6. `IngestRequest` rejects missing `source_name` or `content`. ✅
 7. `SchemaUpdate` rejects missing `content_md`. ✅
 8. `PageView`/`IndexView`/`LogView`/`SchemaView` accept their expected fields without surprise. ✅ — `LogView`/`SchemaView` pinned to be md-only (no `content_html`).
+9. `HallucinationFinding` accepts a fully-specified record (`page`, `claim`, `type`, `layer`, `verdict`, `evidence`). ✅ (`test_hallucination_finding_accepts_fully_specified_record`)
+10. `HallucinationFinding` rejects an unknown `type` literal (Pydantic `Literal` validation). ✅ (`test_hallucination_finding_rejects_unknown_type`)
+11. `HallucinationFinding` rejects an unknown `verdict` literal. ✅ (`test_hallucination_finding_rejects_unknown_verdict`)
+12. `HallucinationFinding` rejects a `layer` outside `[1, 3]` (Pydantic `ge=1, le=3`). ✅ (parametrized `test_hallucination_finding_rejects_layer_out_of_range`)
+13. `HallucinationFinding.evidence` defaults to `""`. ✅ (`test_hallucination_finding_evidence_defaults_to_empty_string`)
+14. `HallucinationCheckResult` requires `summary`, `findings`, `report_path`, `trace`. ✅ (parametrized `test_hallucination_check_result_rejects_missing_field` + happy-path constructor test)
 
 ---
 
@@ -292,6 +317,7 @@ All tests in a new `tests/test_operations.py`. Monkeypatch `app.config.get_setti
 3. User prompt embeds the raw content between `--- BEGIN SOURCE ---` and `--- END SOURCE ---` markers and names the raw path as `raw/<source_name>.md`. ✅
 4. Returns `IngestResult(summary=run_agent.final_text, trace=run_agent.trace)`. ✅
 5. Propagates a `ValueError` from `Wiki.write_raw` (bad slug) without calling `run_agent`. ✅
+6. Passes `max_iterations=settings.max_tool_iterations_ingest` to `run_agent`. ✅ (`test_ingest_uses_ingest_iteration_cap`)
 
 #### `ingest_pdf(source_name, pdf_bytes, *, backend="pypdf")` ✅
 1. Calls extractor returned by `get_pdf_extractor(backend)`, then delegates to `ingest`. ✅
@@ -306,6 +332,7 @@ All tests in a new `tests/test_operations.py`. Monkeypatch `app.config.get_setti
 1. Calls `run_agent` with `system_prompt=QUERY_SYSTEM`, `allowed_tools=READ_ONLY_TOOLS`. ✅
 2. User prompt contains the question. ✅
 3. Returns `QueryResult(answer=..., trace=...)`. ✅
+4. Passes `max_iterations=settings.max_tool_iterations_query` to `run_agent`. ✅ (`test_query_uses_query_iteration_cap`)
 
 #### `chat(history)` ✅
 1. Empty history → raises `ValueError`. ✅
@@ -314,10 +341,29 @@ All tests in a new `tests/test_operations.py`. Monkeypatch `app.config.get_setti
 4. Passes `allowed_tools=READ_ONLY_TOOLS` (chat is read-only). ✅
 5. Returns `ChatResponse(reply=final_text, trace=trace)`. ✅
 6. Multi-turn: a history with two user + one assistant message is preserved verbatim in the messages list. ✅
+7. Passes `max_iterations=settings.max_tool_iterations_chat` to `run_loop`. ✅ (`test_chat_uses_chat_iteration_cap`)
 
 #### `lint()` ✅
 1. Calls `run_agent` with `system_prompt=LINT_SYSTEM`, `allowed_tools=LINT_TOOLS`. ✅
 2. Returns `LintResult(report=final_text, trace=trace)`. ✅
+3. Passes `max_iterations=settings.max_tool_iterations_lint` to `run_agent`. ✅ (`test_lint_uses_lint_iteration_cap`)
+
+#### `_format_hallucination_report(findings) -> str` ✅
+1. Empty findings list produces a report whose statistics block reads `Total findings: 0` and includes a "No findings were recorded" notice. ✅ (`test_hallucination_check_handles_no_findings`)
+2. Non-empty findings produce per-verdict and per-layer counts; pages with contradictions / hallucinations are listed. ✅ (covered by `test_hallucination_check_writes_report_file`)
+3. Findings are grouped under their layer header (`## Layer 1/2/3`) and sub-grouped by page within Layer 3. ✅ (`test_hallucination_check_writes_report_file`)
+4. Each finding line includes the `[type / verdict]` tag and the claim verbatim. ✅
+5. When `evidence` is non-empty, an `- Evidence:` sub-line is rendered; when empty, it is omitted. ✅ (`test_hallucination_report_renders_evidence_when_present`, `test_hallucination_report_omits_evidence_line_when_empty`)
+
+#### `hallucination_check()` ✅
+1. Calls `run_agent` with `system_prompt=HALLUCINATION_SYSTEM`, `allowed_tools=HALLUCINATION_TOOLS`. ✅ (`test_hallucination_check_uses_correct_system_and_tools`)
+2. Passes `max_iterations=settings.max_tool_iterations_hallucination` to `run_agent`. ✅ (`test_hallucination_check_uses_hallucination_iteration_cap`)
+3. Initialises `wiki._hallucination_findings = []` before the agent run so `report_finding` always finds the accumulator. ✅ (implicit — tests would crash on attribute error otherwise)
+4. Writes `<workspace>/hallucination-report.md` containing `# Hallucination Report` + `## Statistics` after the run. ✅ (`test_hallucination_check_writes_report_file`)
+5. Report stats reflect counts per verdict (e.g. `hallucination: 1`, `supported: 1` for a 2-finding fixture). ✅
+6. Returns `HallucinationCheckResult` with `summary`, populated `findings: list[HallucinationFinding]`, `report_path="hallucination-report.md"`, and the agent `trace`. ✅ (`test_hallucination_check_returns_result_schema`)
+7. Handles zero-findings gracefully: still writes the report file with a placeholder body and returns an empty `findings` list. ✅ (`test_hallucination_check_handles_no_findings`)
+8. Does **not** modify any `wiki/<page>.md` or `raw/<page>.md` — pre-existing files are byte-for-byte unchanged after a sweep. ✅ (`test_hallucination_check_does_not_modify_wiki_or_raw`)
 
 ---
 
@@ -354,6 +400,14 @@ Both paths are bound to the same handler.
 
 #### `POST /api/lint` ✅
 1. 200 with `LintResult` shape. ✅
+
+#### `POST /api/hallucination-check` ✅
+1. 200 with `HallucinationCheckResult` shape on success (orchestrator monkeypatched). ✅ (`test_post_hallucination_check_returns_result_shape`)
+2. Empty body is accepted (no request schema). ✅ (`test_post_hallucination_check_accepts_empty_body`)
+
+#### `GET /api/hallucination-report` ✅
+1. 200 with `IndexView` shape (`content_md` + `content_html`) when `hallucination-report.md` exists. ✅ (`test_get_hallucination_report_returns_index_view_when_file_exists`)
+2. 404 with detail mentioning "no hallucination report yet" when the file does not exist. ✅ (`test_get_hallucination_report_returns_404_when_file_missing`)
 
 #### `GET /api/pages` ✅
 1. Returns `[]` for an empty workspace. ✅
@@ -456,13 +510,13 @@ All in `tests/test_cross_cutting.py`. Reuses `_FakeClient`/`_FakeMessage`/`_Fake
 | Module | Status | Notes |
 |---|---|---|
 | `app/wiki.py` | ✅ | Full coverage — schema r/w, `append_log` edges, UTF-8, slug validation on every read path, `_safe_path` injection, `__init__` resolution. |
-| `app/config.py` | ✅ | `test_config.py` — defaults, env-var binding, `workspace_path` resolution, singleton. |
-| `app/tools.py` | ✅ | Full coverage — every handler, every dispatch error branch, every tool set contract. |
-| `app/llm.py` | ✅ | `test_llm.py` — `_preview`, `AgentResult`, `_client`, `run_agent`, `run_loop` (12+ behaviours) via scripted `_FakeClient`. |
-| `app/prompts.py` | ✅ | `test_prompts.py` — required-tool mentions per prompt, READ-ONLY declarations, cross-reference syntax. |
-| `app/schemas.py` | ✅ | `test_schemas.py` — required-field contract, default-factory isolation, md-only views. |
-| `app/operations.py` | ✅ | `test_operations.py` + extended `test_ingest_pdf.py` — every orchestrator covered with `run_agent`/`run_loop` spies. |
-| `app/main.py` | ✅ | `test_main.py` — every route via `TestClient`, error mapping, file-upload routing, `_render_md` extensions. |
+| `app/config.py` | ✅ | `test_config.py` — defaults (incl. all five per-op caps), env-var binding (incl. `MAX_TOOL_ITERATIONS_*` per-op), `workspace_path` resolution, singleton. |
+| `app/tools.py` | ✅ | Full coverage — every handler (incl. `_report_finding` enum/missing-field validation and accumulation), every dispatch error branch, every tool set contract, `HALLUCINATION_TOOLS` exclusions. |
+| `app/llm.py` | ✅ | `test_llm.py` — `_preview`, `AgentResult`, `_client`, `run_agent`, `run_loop` (12+ behaviours) via scripted `_FakeClient`, plus `max_iterations` kwarg forwarded by `run_agent` and honoured exactly by `run_loop`. |
+| `app/prompts.py` | ✅ | `test_prompts.py` — required-tool mentions per prompt, READ-ONLY declarations, cross-reference syntax, plus `HALLUCINATION_SYSTEM` workflow tools / claim-type / verdict / layer-order / write-tool-forbidden contract. |
+| `app/schemas.py` | ✅ | `test_schemas.py` — required-field contract, default-factory isolation, md-only views, `HallucinationFinding` literal + range validation, `HallucinationCheckResult` required fields. |
+| `app/operations.py` | ✅ | `test_operations.py` — every orchestrator (`ingest`, `query`, `chat`, `lint`, `hallucination_check`) covered with `run_agent`/`run_loop` spies; per-op iteration cap pass-through pinned for every operation. `_format_hallucination_report` exercised across empty/non-empty findings and the evidence-rendering branch. |
+| `app/main.py` | ✅ | `test_main.py` — every route via `TestClient`, error mapping, file-upload routing, `_render_md` extensions, plus `POST /api/hallucination-check` (shape + empty-body) and `GET /api/hallucination-report` (200 + 404). |
 | `app/ingest/pdf/base.py` | ✅ | Full coverage incl. missing-`name` ABC + `ExtractedPdf` default-dict isolation. |
 | `app/ingest/pdf/pypdf_backend.py` | ✅ | Encrypted, blank, and per-page-failure cases covered; fixtures are generated at runtime (no binary blobs in git). |
 | `app/ingest/pdf/__init__.py` | ✅ | Default + unknown backend + `isinstance(result, PdfExtractor)`. |

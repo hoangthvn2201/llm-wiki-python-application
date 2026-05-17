@@ -221,6 +221,16 @@ def test_query_returns_query_result(
     assert result.answer == "the answer"
 
 
+def test_query_uses_query_iteration_cap(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+):
+    captured = _capture_run_agent(monkeypatch)
+
+    operations.query("q")
+
+    assert captured.get("max_iterations") == 25
+
+
 # ===================================================================== chat
 
 def test_chat_rejects_empty_history(workspace: Path):
@@ -465,6 +475,43 @@ def test_hallucination_check_handles_no_findings(
     body = (workspace / "hallucination-report.md").read_text(encoding="utf-8")
     assert "Total findings: 0" in body
     assert "No findings were recorded" in body
+
+
+def test_hallucination_report_renders_evidence_when_present():
+    findings = [
+        {
+            "page": "p",
+            "claim": "the claim with evidence",
+            "type": "factual",
+            "layer": 3,
+            "verdict": "contradicted",
+            "evidence": "raw/foo.md disagrees",
+        }
+    ]
+
+    md = operations._format_hallucination_report(findings)
+
+    assert "the claim with evidence" in md
+    assert "- Evidence: raw/foo.md disagrees" in md
+
+
+def test_hallucination_report_omits_evidence_line_when_empty():
+    findings = [
+        {
+            "page": "p",
+            "claim": "claim without evidence",
+            "type": "factual",
+            "layer": 3,
+            "verdict": "unverifiable",
+            "evidence": "",
+        }
+    ]
+
+    md = operations._format_hallucination_report(findings)
+
+    assert "claim without evidence" in md
+    # No evidence sub-line when the field is empty.
+    assert "Evidence:" not in md
 
 
 def test_hallucination_check_does_not_modify_wiki_or_raw(

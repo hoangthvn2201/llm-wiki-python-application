@@ -167,6 +167,57 @@ def test_run_agent_builds_system_user_thread_and_returns_final_text(
     assert sent_messages[1] == {"role": "user", "content": "USER"}
 
 
+def test_run_agent_forwards_max_iterations_to_run_loop(
+    monkeypatch: pytest.MonkeyPatch, wiki: Wiki
+):
+    captured: dict[str, Any] = {}
+
+    def fake_run_loop(*, wiki, messages, allowed_tools, max_iterations=None):
+        captured["max_iterations"] = max_iterations
+        return AgentResult(final_text="ok", trace=[])
+
+    monkeypatch.setattr(llm, "run_loop", fake_run_loop)
+
+    run_agent(
+        wiki=wiki,
+        system_prompt="s",
+        user_prompt="u",
+        allowed_tools=READ_ONLY_TOOLS,
+        max_iterations=7,
+    )
+
+    assert captured["max_iterations"] == 7
+
+
+def test_run_loop_explicit_max_iterations_overrides_settings(
+    monkeypatch: pytest.MonkeyPatch, wiki: Wiki
+):
+    # Settings says 25; the explicit kwarg should win and cap at 3.
+    monkeypatch.setattr(
+        llm,
+        "get_settings",
+        lambda: SimpleNamespace(model_name="m", max_tool_iterations=25),
+    )
+    fake = _FakeClient([
+        _FakeMessage(tool_calls=[_FakeToolCall(id="a", name="list_pages")]),
+        _FakeMessage(tool_calls=[_FakeToolCall(id="b", name="list_pages")]),
+        _FakeMessage(tool_calls=[_FakeToolCall(id="c", name="list_pages")]),
+    ])
+    _install_fake_client(monkeypatch, fake)
+
+    result = run_loop(
+        wiki=wiki,
+        messages=[{"role": "user", "content": "x"}],
+        allowed_tools=READ_ONLY_TOOLS,
+        max_iterations=3,
+    )
+
+    # Exactly N create calls happen before the fallback fires.
+    assert len(fake.calls) == 3
+    assert "MAX_TOOL_ITERATIONS" in result.final_text
+    assert "[3]" in result.final_text
+
+
 def test_run_agent_passes_allowed_tools_through(
     monkeypatch: pytest.MonkeyPatch, wiki: Wiki
 ):
