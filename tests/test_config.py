@@ -23,6 +23,11 @@ _BOUND_ENV_VARS = (
     "MODEL_NAME",
     "WORKSPACE_DIR",
     "MAX_TOOL_ITERATIONS",
+    "MAX_TOOL_ITERATIONS_INGEST",
+    "MAX_TOOL_ITERATIONS_QUERY",
+    "MAX_TOOL_ITERATIONS_CHAT",
+    "MAX_TOOL_ITERATIONS_LINT",
+    "MAX_TOOL_ITERATIONS_HALLUCINATION",
 )
 
 
@@ -69,6 +74,24 @@ def test_settings_max_tool_iterations_default_is_int(clean_env):
     assert isinstance(s.max_tool_iterations, int)
 
 
+@pytest.mark.parametrize(
+    "field,expected",
+    [
+        ("max_tool_iterations_ingest", 25),
+        ("max_tool_iterations_query", 25),
+        ("max_tool_iterations_chat", 25),
+        ("max_tool_iterations_lint", 50),
+        ("max_tool_iterations_hallucination", 150),
+    ],
+)
+def test_settings_per_op_iteration_cap_defaults(clean_env, field: str, expected: int):
+    s = Settings(_env_file=None)
+
+    actual = getattr(s, field)
+    assert actual == expected
+    assert isinstance(actual, int)
+
+
 # ---------------------------------------------------------- env-var binding
 
 def test_settings_reads_openai_api_key_from_env(clean_env):
@@ -96,6 +119,28 @@ def test_settings_coerces_workspace_dir_to_path(clean_env, tmp_path: Path):
 
     assert s.workspace_dir == target
     assert isinstance(s.workspace_dir, Path)
+
+
+@pytest.mark.parametrize(
+    "env_var,field",
+    [
+        ("MAX_TOOL_ITERATIONS_INGEST", "max_tool_iterations_ingest"),
+        ("MAX_TOOL_ITERATIONS_QUERY", "max_tool_iterations_query"),
+        ("MAX_TOOL_ITERATIONS_CHAT", "max_tool_iterations_chat"),
+        ("MAX_TOOL_ITERATIONS_LINT", "max_tool_iterations_lint"),
+        ("MAX_TOOL_ITERATIONS_HALLUCINATION", "max_tool_iterations_hallucination"),
+    ],
+)
+def test_settings_per_op_iteration_caps_bind_from_env(
+    clean_env, env_var: str, field: str
+):
+    clean_env.setenv(env_var, "200")
+
+    s = Settings(_env_file=None)
+
+    actual = getattr(s, field)
+    assert actual == 200
+    assert isinstance(actual, int)
 
 
 def test_settings_ignores_unknown_env_vars(clean_env):

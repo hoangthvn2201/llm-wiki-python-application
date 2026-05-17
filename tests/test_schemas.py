@@ -8,6 +8,8 @@ We trust pydantic to enforce types; these tests pin the few decisions where
 """
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -15,6 +17,8 @@ from app.schemas import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    HallucinationCheckResult,
+    HallucinationFinding,
     IndexView,
     IngestRequest,
     IngestResult,
@@ -214,3 +218,82 @@ def test_schema_update_accepts_content_md():
     upd = SchemaUpdate(content_md="# New schema")
 
     assert upd.content_md == "# New schema"
+
+
+# ------------------------------------------------------- HallucinationFinding
+
+def _valid_finding(**overrides: Any) -> dict[str, Any]:
+    base = {
+        "page": "napoleon",
+        "claim": "Napoleon was born in 1769",
+        "type": "quantitative",
+        "layer": 3,
+        "verdict": "supported",
+        "evidence": "raw/napoleon.md confirms 1769",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_hallucination_finding_accepts_fully_specified_record():
+    f = HallucinationFinding(**_valid_finding())
+
+    assert f.page == "napoleon"
+    assert f.type == "quantitative"
+    assert f.layer == 3
+    assert f.verdict == "supported"
+    assert f.evidence == "raw/napoleon.md confirms 1769"
+
+
+def test_hallucination_finding_rejects_unknown_type():
+    with pytest.raises(ValidationError):
+        HallucinationFinding(**_valid_finding(type="made-up-bucket"))
+
+
+def test_hallucination_finding_rejects_unknown_verdict():
+    with pytest.raises(ValidationError):
+        HallucinationFinding(**_valid_finding(verdict="maybe"))
+
+
+@pytest.mark.parametrize("bad_layer", [0, 4, 7, -1])
+def test_hallucination_finding_rejects_layer_out_of_range(bad_layer: int):
+    with pytest.raises(ValidationError):
+        HallucinationFinding(**_valid_finding(layer=bad_layer))
+
+
+def test_hallucination_finding_evidence_defaults_to_empty_string():
+    payload = _valid_finding()
+    payload.pop("evidence")
+
+    f = HallucinationFinding(**payload)
+
+    assert f.evidence == ""
+
+
+# ----------------------------------------------------- HallucinationCheckResult
+
+def test_hallucination_check_result_constructs_with_required_fields():
+    result = HallucinationCheckResult(
+        summary="ok",
+        findings=[],
+        report_path="hallucination-report.md",
+        trace=[],
+    )
+
+    assert result.summary == "ok"
+    assert result.findings == []
+    assert result.report_path == "hallucination-report.md"
+
+
+@pytest.mark.parametrize("missing", ["summary", "findings", "report_path", "trace"])
+def test_hallucination_check_result_rejects_missing_field(missing: str):
+    payload: dict[str, Any] = {
+        "summary": "ok",
+        "findings": [],
+        "report_path": "hallucination-report.md",
+        "trace": [],
+    }
+    payload.pop(missing)
+
+    with pytest.raises(ValidationError):
+        HallucinationCheckResult(**payload)

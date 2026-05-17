@@ -237,15 +237,118 @@ def test_read_only_tools_excludes_every_mutating_tool():
     assert forbidden.isdisjoint(READ_ONLY_TOOLS)
 
 
-def test_lint_tools_equals_all_tools():
+def test_lint_tools_covers_all_except_hallucination_only():
     from app.tools import LINT_TOOLS
 
-    assert set(LINT_TOOLS) == set(ALL_TOOLS.keys())
+    # LINT_TOOLS gets every tool except the hallucination-only ones.
+    assert set(LINT_TOOLS) == set(ALL_TOOLS.keys()) - {"report_finding"}
+
+
+def test_ingest_and_lint_tools_exclude_report_finding():
+    from app.tools import INGEST_TOOLS, LINT_TOOLS
+
+    assert "report_finding" not in INGEST_TOOLS
+    assert "report_finding" not in LINT_TOOLS
 
 
 def test_every_tool_name_in_sets_exists_in_registry():
-    from app.tools import INGEST_TOOLS, LINT_TOOLS
+    from app.tools import HALLUCINATION_TOOLS, INGEST_TOOLS, LINT_TOOLS
 
-    for tool_set in (READ_ONLY_TOOLS, INGEST_TOOLS, LINT_TOOLS):
+    for tool_set in (READ_ONLY_TOOLS, INGEST_TOOLS, LINT_TOOLS, HALLUCINATION_TOOLS):
         for name in tool_set:
             assert name in ALL_TOOLS, f"Tool set references unknown tool {name!r}"
+
+
+# ============================================================ report_finding
+
+def test_hallucination_tools_excludes_write_pages():
+    from app.tools import HALLUCINATION_TOOLS
+
+    assert "write_page" not in HALLUCINATION_TOOLS
+    assert "write_index" not in HALLUCINATION_TOOLS
+    assert "report_finding" in HALLUCINATION_TOOLS
+    assert "append_log" in HALLUCINATION_TOOLS
+
+
+def test_report_finding_accumulates_on_wiki(wiki: Wiki):
+    payload1 = json.dumps({
+        "page": "napoleon",
+        "claim": "Napoleon was born in 1769",
+        "type": "quantitative",
+        "layer": 3,
+        "verdict": "supported",
+        "evidence": "raw/napoleon-bio.md confirms 1769",
+    })
+    payload2 = json.dumps({
+        "page": "napoleon",
+        "claim": "Napoleon authored War and Peace",
+        "type": "relational",
+        "layer": 3,
+        "verdict": "hallucination",
+    })
+
+    out1 = dispatch(wiki, "report_finding", payload1)
+    out2 = dispatch(wiki, "report_finding", payload2)
+
+    assert "recorded" in out1
+    assert "recorded" in out2
+    findings = getattr(wiki, "_hallucination_findings")
+    assert len(findings) == 2
+    assert findings[0]["type"] == "quantitative"
+    assert findings[0]["verdict"] == "supported"
+    assert findings[0]["evidence"] == "raw/napoleon-bio.md confirms 1769"
+    assert findings[1]["verdict"] == "hallucination"
+    assert findings[1]["evidence"] == ""  # default empty when omitted
+
+
+def test_report_finding_rejects_bad_type(wiki: Wiki):
+    payload = json.dumps({
+        "page": "p",
+        "claim": "c",
+        "type": "made-up-type",
+        "layer": 1,
+        "verdict": "supported",
+    })
+
+    out = dispatch(wiki, "report_finding", payload)
+
+    assert out.startswith("ERROR")
+    assert "made-up-type" in out
+
+
+def test_report_finding_rejects_bad_verdict(wiki: Wiki):
+    payload = json.dumps({
+        "page": "p",
+        "claim": "c",
+        "type": "factual",
+        "layer": 1,
+        "verdict": "maybe",
+    })
+
+    out = dispatch(wiki, "report_finding", payload)
+
+    assert out.startswith("ERROR")
+    assert "maybe" in out
+
+
+def test_report_finding_rejects_bad_layer(wiki: Wiki):
+    payload = json.dumps({
+        "page": "p",
+        "claim": "c",
+        "type": "factual",
+        "layer": 7,
+        "verdict": "supported",
+    })
+
+    out = dispatch(wiki, "report_finding", payload)
+
+    assert out.startswith("ERROR")
+
+
+def test_report_finding_missing_required_field(wiki: Wiki):
+    payload = json.dumps({"page": "p", "type": "factual", "layer": 1, "verdict": "supported"})
+
+    out = dispatch(wiki, "report_finding", payload)
+
+    assert out.startswith("ERROR")
+    assert "claim" in out

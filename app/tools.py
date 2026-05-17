@@ -82,6 +82,51 @@ def _read_raw(wiki: Wiki, args: dict[str, Any]) -> str:
     return wiki.read_raw(args["name"])
 
 
+_FINDING_TYPES = {"factual", "quantitative", "relational", "temporal", "negation", "synthesis"}
+_FINDING_VERDICTS = {"supported", "contradicted", "unverifiable", "hallucination"}
+_FINDING_LAYERS = {1, 2, 3}
+
+
+def _report_finding(wiki: Wiki, args: dict[str, Any]) -> str:
+    """Record one hallucination-check finding on the per-call wiki instance.
+
+    Findings accumulate on `wiki._hallucination_findings`; the orchestrator
+    reads the list after the agent loop returns and writes the report file.
+    """
+    required = ("page", "claim", "type", "layer", "verdict")
+    missing = [k for k in required if k not in args]
+    if missing:
+        raise ValueError(f"report_finding missing fields: {missing}")
+    ftype = args["type"]
+    if ftype not in _FINDING_TYPES:
+        raise ValueError(
+            f"invalid type {ftype!r}; must be one of {sorted(_FINDING_TYPES)}"
+        )
+    verdict = args["verdict"]
+    if verdict not in _FINDING_VERDICTS:
+        raise ValueError(
+            f"invalid verdict {verdict!r}; must be one of {sorted(_FINDING_VERDICTS)}"
+        )
+    try:
+        layer = int(args["layer"])
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"invalid layer {args['layer']!r}: not an integer") from e
+    if layer not in _FINDING_LAYERS:
+        raise ValueError(f"invalid layer {layer}; must be 1, 2, or 3")
+    if not hasattr(wiki, "_hallucination_findings"):
+        wiki._hallucination_findings = []
+    finding = {
+        "page": str(args["page"]),
+        "claim": str(args["claim"]),
+        "type": ftype,
+        "layer": layer,
+        "verdict": verdict,
+        "evidence": str(args.get("evidence", "")),
+    }
+    wiki._hallucination_findings.append(finding)
+    return f"recorded {ftype}/{verdict} for {finding['page']} (layer {layer})"
+
+
 def _finish(_wiki: Wiki, args: dict[str, Any]) -> str:
     # The agent loop intercepts `finish` to terminate; the result is unused but
     # we still return something readable for completeness.
@@ -177,6 +222,47 @@ ALL_TOOLS: dict[str, Tool] = {
             handler=_read_raw,
         ),
         Tool(
+            name="report_finding",
+            description=(
+                "Record one hallucination-check finding. Call once per claim you "
+                "evaluate during a hallucination sweep. Only available to the "
+                "hallucination-check operation."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "page": {
+                        "type": "string",
+                        "description": "wiki page slug the claim is from",
+                    },
+                    "claim": {
+                        "type": "string",
+                        "description": "short paraphrase or quote of the claim being verified",
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": sorted(_FINDING_TYPES),
+                        "description": "claim taxonomy bucket",
+                    },
+                    "layer": {
+                        "type": "integer",
+                        "enum": sorted(_FINDING_LAYERS),
+                        "description": "1=entity, 2=description, 3=claim",
+                    },
+                    "verdict": {
+                        "type": "string",
+                        "enum": sorted(_FINDING_VERDICTS),
+                    },
+                    "evidence": {
+                        "type": "string",
+                        "description": "one-sentence justification pointing to the source",
+                    },
+                },
+                "required": ["page", "claim", "type", "layer", "verdict"],
+            },
+            handler=_report_finding,
+        ),
+        Tool(
             name="finish",
             description=(
                 "Signal that the operation is complete. Provide a short summary of what "
@@ -193,9 +279,24 @@ ALL_TOOLS: dict[str, Tool] = {
 }
 
 
+# report_finding is only meaningful inside a hallucination sweep — it would
+# just clutter the ingest/lint tool surface, so it's excluded from those sets.
+_HALLUCINATION_ONLY = {"report_finding"}
+
 READ_ONLY_TOOLS = ["list_pages", "read_page", "read_index", "read_schema", "list_raw", "read_raw", "finish"]
-INGEST_TOOLS = list(ALL_TOOLS.keys())
-LINT_TOOLS = list(ALL_TOOLS.keys())
+INGEST_TOOLS = [name for name in ALL_TOOLS if name not in _HALLUCINATION_ONLY]
+LINT_TOOLS = [name for name in ALL_TOOLS if name not in _HALLUCINATION_ONLY]
+HALLUCINATION_TOOLS = [
+    "list_pages",
+    "read_page",
+    "read_index",
+    "read_schema",
+    "list_raw",
+    "read_raw",
+    "report_finding",
+    "append_log",
+    "finish",
+]
 
 
 def schemas_for(allowed: list[str]) -> list[dict[str, Any]]:

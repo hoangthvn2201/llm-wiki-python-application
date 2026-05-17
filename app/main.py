@@ -11,10 +11,19 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from app.config import get_settings
-from app.operations import chat, ingest, ingest_pdf, lint, query
+from app.operations import (
+    HALLUCINATION_REPORT_FILENAME,
+    chat,
+    hallucination_check,
+    ingest,
+    ingest_pdf,
+    lint,
+    query,
+)
 from app.schemas import (
     ChatRequest,
     ChatResponse,
+    HallucinationCheckResult,
     IndexView,
     IngestRequest,
     IngestResult,
@@ -103,6 +112,21 @@ def api_chat(req: ChatRequest) -> ChatResponse:
 @app.post("/api/lint", response_model=LintResult)
 def api_lint() -> LintResult:
     return lint()
+
+
+@app.post("/api/hallucination-check", response_model=HallucinationCheckResult)
+def api_hallucination_check() -> HallucinationCheckResult:
+    return hallucination_check()
+
+
+@app.get("/api/hallucination-report", response_model=IndexView)
+def api_hallucination_report() -> IndexView:
+    wiki = _wiki()
+    path = wiki.root / HALLUCINATION_REPORT_FILENAME
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="no hallucination report yet — run a sweep first")
+    content = path.read_text(encoding="utf-8")
+    return IndexView(content_md=content, content_html=_render_md(content))
 
 
 @app.get("/api/pages", response_model=list[str])

@@ -41,13 +41,19 @@ def run_agent(
     system_prompt: str,
     user_prompt: str,
     allowed_tools: list[str],
+    max_iterations: int | None = None,
 ) -> AgentResult:
     """Single-turn entry point: builds a fresh [system, user] thread."""
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    return run_loop(wiki=wiki, messages=messages, allowed_tools=allowed_tools)
+    return run_loop(
+        wiki=wiki,
+        messages=messages,
+        allowed_tools=allowed_tools,
+        max_iterations=max_iterations,
+    )
 
 
 def run_loop(
@@ -55,6 +61,7 @@ def run_loop(
     wiki: Wiki,
     messages: list[dict[str, Any]],
     allowed_tools: list[str],
+    max_iterations: int | None = None,
 ) -> AgentResult:
     """Run the tool-use loop on a pre-built message list.
 
@@ -68,7 +75,9 @@ def run_loop(
     tools = schemas_for(allowed_tools)
     trace: list[TraceStep] = []
 
-    for _ in range(settings.max_tool_iterations):
+    iter_cap = max_iterations if max_iterations is not None else settings.max_tool_iterations
+
+    for _ in range(iter_cap):
         response = client.chat.completions.create(
             model=settings.model_name,
             messages=messages,
@@ -126,6 +135,8 @@ def run_loop(
             return AgentResult(final_text=finish_summary, trace=trace)
 
     return AgentResult(
-        final_text="(agent hit MAX_TOOL_ITERATIONS without calling finish)",
+        final_text=(
+            f"(agent hit MAX_TOOL_ITERATIONS [{iter_cap}] without calling finish)"
+        ),
         trace=trace,
     )

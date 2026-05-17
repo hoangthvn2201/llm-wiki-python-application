@@ -35,7 +35,15 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point both operations and main at a temp workspace."""
     ws = tmp_path / "ws"
     Wiki(ws).ensure()
-    settings = SimpleNamespace(workspace_path=ws)
+    settings = SimpleNamespace(
+        workspace_path=ws,
+        max_tool_iterations=25,
+        max_tool_iterations_ingest=25,
+        max_tool_iterations_query=25,
+        max_tool_iterations_chat=25,
+        max_tool_iterations_lint=50,
+        max_tool_iterations_hallucination=150,
+    )
     monkeypatch.setattr(operations, "get_settings", lambda: settings)
     monkeypatch.setattr(main, "get_settings", lambda: settings)
     return ws

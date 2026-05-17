@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from app.prompts import CHAT_SYSTEM, INGEST_SYSTEM, LINT_SYSTEM, QUERY_SYSTEM
+from app.prompts import (
+    CHAT_SYSTEM,
+    HALLUCINATION_SYSTEM,
+    INGEST_SYSTEM,
+    LINT_SYSTEM,
+    QUERY_SYSTEM,
+)
 
 
 # ============================================================== INGEST_SYSTEM
@@ -116,3 +122,84 @@ def test_lint_system_is_non_empty():
 @pytest.mark.parametrize("tool", LINT_REQUIRED_TOOLS)
 def test_lint_system_mentions_required_tool(tool: str):
     assert tool in LINT_SYSTEM, f"LINT_SYSTEM is missing reference to {tool}"
+
+
+# ====================================================== HALLUCINATION_SYSTEM
+
+HALLUCINATION_REQUIRED_TOOLS = (
+    "read_schema",
+    "read_index",
+    "read_page",
+    "list_raw",
+    "read_raw",
+    "report_finding",
+    "append_log",
+    "finish",
+)
+
+HALLUCINATION_CLAIM_TYPES = (
+    "factual",
+    "quantitative",
+    "relational",
+    "temporal",
+    "negation",
+    "synthesis",
+)
+
+HALLUCINATION_VERDICTS = (
+    "supported",
+    "contradicted",
+    "unverifiable",
+    "hallucination",
+)
+
+
+def test_hallucination_system_is_non_empty():
+    assert HALLUCINATION_SYSTEM.strip()
+
+
+def test_hallucination_system_declares_read_only():
+    assert "READ-ONLY" in HALLUCINATION_SYSTEM
+
+
+@pytest.mark.parametrize("tool", HALLUCINATION_REQUIRED_TOOLS)
+def test_hallucination_system_mentions_required_tool(tool: str):
+    assert tool in HALLUCINATION_SYSTEM, (
+        f"HALLUCINATION_SYSTEM is missing reference to {tool}"
+    )
+
+
+def test_hallucination_system_forbids_write_tools_explicitly():
+    # The prompt should actively warn the agent off the write tools — they're
+    # not in HALLUCINATION_TOOLS so calling them is futile, but a defensive
+    # "MUST NOT" sentence catches drift if the tool set is ever widened.
+    text = HALLUCINATION_SYSTEM.lower()
+    assert "must not" in text or "do not" in text
+    assert "write_page" in HALLUCINATION_SYSTEM
+    assert "write_index" in HALLUCINATION_SYSTEM
+
+
+@pytest.mark.parametrize("claim_type", HALLUCINATION_CLAIM_TYPES)
+def test_hallucination_system_mentions_claim_type(claim_type: str):
+    assert claim_type in HALLUCINATION_SYSTEM, (
+        f"HALLUCINATION_SYSTEM is missing claim type {claim_type}"
+    )
+
+
+@pytest.mark.parametrize("verdict", HALLUCINATION_VERDICTS)
+def test_hallucination_system_mentions_verdict(verdict: str):
+    assert verdict in HALLUCINATION_SYSTEM, (
+        f"HALLUCINATION_SYSTEM is missing verdict {verdict}"
+    )
+
+
+def test_hallucination_system_describes_layers_in_order():
+    # Layer 1 → entity, Layer 2 → description, Layer 3 → claim. The agent loop
+    # depends on this ordering for the report grouping.
+    text = HALLUCINATION_SYSTEM
+    l1 = text.find("Layer 1")
+    l2 = text.find("Layer 2")
+    l3 = text.find("Layer 3")
+
+    assert l1 != -1 and l2 != -1 and l3 != -1
+    assert l1 < l2 < l3

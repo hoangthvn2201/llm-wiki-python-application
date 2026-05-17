@@ -44,6 +44,11 @@
         <span class="nav-text">Lint</span>
         <span class="nav-hint">health</span>
       </button>
+      <button class="tab" data-tab="hallucination">
+        <span class="nav-icon" aria-hidden="true">⚠</span>
+        <span class="nav-text">Hallucination</span>
+        <span class="nav-hint">audit</span>
+      </button>
     </nav>
 
     <div class="sidebar-footer">
@@ -178,6 +183,44 @@
         <details class="trace-details">
           <summary>tool trace</summary>
           <ol id="lint-trace" class="trace"></ol>
+        </details>
+      </section>
+    </section>
+
+    <!-- HALLUCINATION -->
+    <section id="tab-hallucination" class="panel">
+      <header class="panel-header">
+        <div class="eyebrow">archive · hallucination</div>
+        <h1>Hallucination Audit</h1>
+        <p class="lede">Verify every wiki page against the raw sources. Three layers: entity, description, claim — with per-claim type tagging.</p>
+      </header>
+
+      <div class="card form-card">
+        <div class="action-row">
+          <button id="hallu-go" class="btn-primary"><span class="btn-glyph">▶</span> Run sweep</button>
+          <div id="hallu-status" class="status"></div>
+        </div>
+        <p class="hallu-warn muted"><strong>⚠ Heads up:</strong> a full sweep emits one tool call per claim and can consume a large number of AI tokens. For routine runs, consider pointing <code>OPENAI_BASE_URL</code> at a locally-hosted LLM (e.g. Ollama).</p>
+      </div>
+
+      <section class="card result-card" id="hallu-stats-card" hidden>
+        <div class="card-head">
+          <h2>Statistics</h2>
+          <span class="tag tag-ai">summary</span>
+        </div>
+        <div id="hallu-summary" class="rendered"></div>
+        <div id="hallu-stats" class="rendered"></div>
+      </section>
+
+      <section class="card result-card">
+        <div class="card-head">
+          <h2>Report</h2>
+          <span class="tag tag-ai">audit</span>
+        </div>
+        <div id="hallu-report" class="rendered"></div>
+        <details class="trace-details">
+          <summary>tool trace</summary>
+          <ol id="hallu-trace" class="trace"></ol>
         </details>
       </section>
     </section>
